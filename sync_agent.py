@@ -123,39 +123,57 @@ def list_pending_updates():
         return [l.split()[0]+" → "+l.split()[1] for l in o.splitlines() if "/upgradeable" in l]
     except: return []
 
+def detect_device_type():
+    try:
+        out = subprocess.run(['systemctl', 'get-default'], stdout=subprocess.PIPE, text=True).stdout.strip()
+        if out == "graphical.target":
+            return 92  # workstation
+        else:
+            return 109  # servidor
+    except:
+        return 109  # fallback
+
 def get_minimal(uniqueid, idsync):
-    return {"uniqueid": uniqueid, "IdSync": idsync,
-            "agent_version": AGENT_VERSION,
-            "cpu_percent": psutil.cpu_percent(interval=1),
-            "memory_percent": psutil.virtual_memory().percent,
-            "FullSync": 0,
-            "timestamp": datetime.utcnow().isoformat()}
+    return {
+        "uniqueid": uniqueid,
+        "IdSync": idsync,
+        "agent_version": AGENT_VERSION,
+        "IdDeviceType": detect_device_type(),
+        "cpu_percent": psutil.cpu_percent(interval=1),
+        "memory_percent": psutil.virtual_memory().percent,
+        "FullSync": 0,
+        "timestamp": datetime.utcnow().isoformat()
+    }
 
 def get_full(uniqueid, idsync):
-    return {"uniqueid": uniqueid, "IdSync": idsync,
-            "agent_version": AGENT_VERSION,
-            "hostname": socket.gethostname(),
-            "ip_address": socket.gethostbyname(socket.gethostname()),
-            "mac_address": get_mac_address(),
-            "cpu_percent": psutil.cpu_percent(interval=1),
-            "memory_percent": psutil.virtual_memory().percent,
-            "disk_percent": psutil.disk_usage('/').percent,
-            "user": os.getenv("USER") or os.getenv("LOGNAME") or "",
-            "timestamp": datetime.utcnow().isoformat(),
-            "FullSync": 1,
-            "processes": get_process_list(),
-            "cpu_model": platform.processor(),
-            "cpu_cores": psutil.cpu_count(logical=True),
-            "kernel_version": platform.release(),
-            "distribution": get_distribution(),
-            "uptime_seconds": float(open('/proc/uptime').read().split()[0]) if os.path.exists('/proc/uptime') else None,
-            "network": get_network_info(),
-            "storage": get_storage_info(),
-            "firewall_status": check_firewall(),
-            "ssh_status": check_ssh(),
-            "services": list_services(),
-            "installed_packages": list_installed_packages(),
-            "pending_updates": list_pending_updates()}
+    return {
+        "uniqueid": uniqueid,
+        "IdSync": idsync,
+        "agent_version": AGENT_VERSION,
+        "IdDeviceType": detect_device_type(),
+        "hostname": socket.gethostname(),
+        "ip_address": socket.gethostbyname(socket.gethostname()),
+        "mac_address": get_mac_address(),
+        "cpu_percent": psutil.cpu_percent(interval=1),
+        "memory_percent": psutil.virtual_memory().percent,
+        "disk_percent": psutil.disk_usage('/').percent,
+        "user": os.getenv("USER") or os.getenv("LOGNAME") or "",
+        "timestamp": datetime.utcnow().isoformat(),
+        "FullSync": 1,
+        "processes": get_process_list(),
+        "cpu_model": platform.processor(),
+        "cpu_cores": psutil.cpu_count(logical=True),
+        "kernel_version": platform.release(),
+        "distribution": get_distribution(),
+        "uptime_seconds": float(open('/proc/uptime').read().split()[0]) if os.path.exists('/proc/uptime') else None,
+        "network": get_network_info(),
+        "storage": get_storage_info(),
+        "firewall_status": check_firewall(),
+        "ssh_status": check_ssh(),
+        "services": list_services(),
+        "installed_packages": list_installed_packages(),
+        "pending_updates": list_pending_updates()
+    }
 
 def send(data):
     try:
@@ -178,3 +196,4 @@ def main():
 
 if __name__=="__main__":
     main()
+            
