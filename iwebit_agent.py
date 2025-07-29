@@ -6,7 +6,7 @@ from datetime import datetime
 CONFIG_PATH = '/etc/iwebit_agent.conf'
 LOG_PATH = '/var/log/iwebit_agent.log'
 VERSION = '1.0.0.0'
-API_URL = 'https://agent.iwebit.app/scripts/script_Linux.php'
+API_URL = 'https://agent.iwebit.app/scripts/script_linux.php'
 
 def load_config():
     config = {}
