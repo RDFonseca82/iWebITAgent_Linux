@@ -145,11 +145,11 @@ def check_for_updates():
 # =================== SYNC ===================
 def send_data(fullsync):
     config = load_config()
-    log(f"Config loaded in send_data: {config}")  # <-- linha para debug
+    # log(f"Config loaded in send_data: {config}")  # <-- linha para debug
     idsync = config.get('IdSync', '0')
     hostname = get_hostname()
     uniqueid = config.get('UniqueId', '0')
-    log(f"UniqueId read: '{uniqueid}'")  # <-- linha para debug
+    # log(f"UniqueId read: '{uniqueid}'")  # <-- linha para debug
     latitude, longitude = get_location()
 
     data = {
