@@ -1,166 +1,152 @@
 #!/usr/bin/env python3
-
-import os
-import sys
-import time
-import json
-import logging
-import requests
-import socket
 import subprocess
 import hashlib
-from datetime import datetime
+import socket
+import requests
+import json
+import time
+import os
 
-# ====================
-# Configurações
-# ====================
-API_URL = "https://agent.iwebit.app/scripts/script_Linux.php"
-UNIQUE_ID_FILE = "/etc/iwebit_agent_id"
-CONFIG_FILE = "/etc/iwebit_agent.conf"
-VERSION = "1.0.0.0"
-LOG = 1  # 1 = ativo, 0 = desativo
+URL = "https://agent.iwebit.app/scripts/script_Linux.php"
+CONFIG_PATH = "/etc/iwebit_agent.conf"
 LOG_FILE = "/var/log/iwebit_agent.log"
 
-# ====================
-# Logging
-# ====================
-if LOG:
-    os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
-    logging.basicConfig(
-        filename=LOG_FILE,
-        level=logging.DEBUG,
-        format="%(asctime)s - %(levelname)s - %(message)s"
-    )
-    logging.debug("Logging ativado.")
-else:
-    logging.basicConfig(level=logging.CRITICAL)
+def log(msg):
+    config = read_config()
+    if config.get("Log", "0") == "1":
+        with open(LOG_FILE, "a") as f:
+            f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}\n")
 
-def log_info(msg): logging.info(msg) if LOG else None
-def log_error(msg): logging.error(msg) if LOG else None
+def read_config():
+    config = {}
+    if os.path.exists(CONFIG_PATH):
+        with open(CONFIG_PATH, "r") as f:
+            for line in f:
+                line=line.strip()
+                if line and "=" in line and not line.startswith("#"):
+                    k,v = line.split("=",1)
+                    config[k.strip()] = v.strip()
+    return config
 
-# ====================
-# Funções Utilitárias
-# ====================
 def get_hostname():
-    try:
-        return socket.gethostname()
-    except:
-        return "unknown"
+    return socket.gethostname()
 
-def get_idsync():
+def get_mac():
     try:
-        if os.path.exists(CONFIG_FILE):
-            with open(CONFIG_FILE, "r") as f:
-                for line in f:
-                    if line.startswith("IdSync="):
-                        return line.strip().split("=")[1]
+        # Pega o MAC da primeira interface ativa (não loopback)
+        result = subprocess.run("ip link show", shell=True, capture_output=True, text=True)
+        lines = result.stdout.splitlines()
+        for i in range(len(lines)):
+            if "state UP" in lines[i]:
+                # MAC está na linha anterior: "link/ether XX:XX:XX:XX:XX:XX"
+                if i>0:
+                    mac_line = lines[i-1].strip()
+                    if "link/ether" in mac_line:
+                        return mac_line.split()[1]
     except Exception as e:
-        log_error(f"Erro ao ler IdSync: {e}")
-    return "0"
-
-def generate_unique_id():
-    try:
-        hostname = get_hostname()
-        idsync = get_idsync()
-        combined = f"{idsync}-{hostname}"
-        unique_id = hashlib.sha256(combined.encode()).hexdigest()
-        return unique_id
-    except Exception as e:
-        log_error(f"Erro ao gerar unique ID: {e}")
-        return "unknown"
-
-def get_mac_address():
-    try:
-        result = subprocess.check_output("ip link show", shell=True).decode()
-        for line in result.splitlines():
-            if "link/ether" in line:
-                return line.strip().split()[1]
-    except Exception as e:
-        log_error(f"Erro ao obter MAC address: {e}")
+        log(f"Erro ao obter MAC: {e}")
     return "00:00:00:00:00:00"
 
-def get_cpu_mem():
+def get_cpu():
     try:
-        cpu = subprocess.check_output("top -bn1 | grep '%Cpu'", shell=True).decode()
-        mem = subprocess.check_output("free -m", shell=True).decode()
-        return {"cpu": cpu.strip(), "memory": mem.strip()}
-    except Exception as e:
-        log_error(f"Erro ao obter CPU/Memória: {e}")
-        return {}
+        result = subprocess.run("top -bn1 | grep '%Cpu'", shell=True, capture_output=True, text=True)
+        return result.stdout.strip()
+    except:
+        return ""
+
+def get_memory():
+    try:
+        result = subprocess.run("free -m", shell=True, capture_output=True, text=True)
+        return result.stdout.strip()
+    except:
+        return ""
 
 def get_processes():
     try:
-        ps = subprocess.check_output("ps aux", shell=True).decode()
-        return ps.strip()
-    except Exception as e:
-        log_error(f"Erro ao obter processos: {e}")
-        return ""
-
-def get_installed_packages():
-    try:
-        result = subprocess.check_output("dpkg -l", shell=True).decode()
-        return result
-    except Exception as e:
-        log_error(f"Erro ao obter pacotes: {e}")
-        return ""
-
-def get_pending_updates():
-    try:
-        result = subprocess.check_output("apt list --upgradable 2>/dev/null", shell=True).decode()
-        return result
-    except Exception as e:
-        log_error(f"Erro ao obter atualizações pendentes: {e}")
-        return ""
-
-def is_server():
-    try:
-        result = subprocess.check_output("systemctl list-units --type=service", shell=True).decode()
-        return "apache2" in result or "nginx" in result or "mysql" in result
+        result = subprocess.run("ps aux", shell=True, capture_output=True, text=True)
+        return result.stdout.strip()
     except:
+        return ""
+
+def get_packages():
+    try:
+        result = subprocess.run("dpkg -l", shell=True, capture_output=True, text=True)
+        return result.stdout.strip()
+    except:
+        return ""
+
+def get_updates():
+    try:
+        result = subprocess.run("apt list --upgradable 2>/dev/null", shell=True, capture_output=True, text=True)
+        return result.stdout.strip()
+    except:
+        return ""
+
+def get_device_type():
+    # Simples heurística para distinguir servidor ou workstation
+    try:
+        result = subprocess.run("hostnamectl", shell=True, capture_output=True, text=True)
+        output = result.stdout.lower()
+        if "server" in output or "virtual" in output:
+            return 109
+    except:
+        pass
+    return 92
+
+def generate_uniqueid(idsync, hostname):
+    base = idsync + hostname
+    return hashlib.sha256(base.encode("utf-8")).hexdigest()
+
+def send_data(data):
+    headers = {'Content-Type': 'application/json'}
+    try:
+        response = requests.post(URL, data=json.dumps(data), headers=headers, timeout=15)
+        log(f"Envio OK, resposta: {response.status_code}")
+        return response.status_code == 200
+    except Exception as e:
+        log(f"Erro no envio: {e}")
         return False
 
-# ====================
-# Função principal
-# ====================
-def sync(full_sync=False):
-    try:
-        unique_id = generate_unique_id()
-        mac = get_mac_address()
-        cpu_mem = get_cpu_mem()
-
-        payload = {
-            "uniqueid": unique_id,
-            "mac": mac,
-            "hostname": get_hostname(),
-            "cpu": cpu_mem.get("cpu", ""),
-            "memory": cpu_mem.get("memory", ""),
-            "FullSync": 1 if full_sync else 0,
-            "IdDeviceType": 109 if is_server() else 92,
-            "version": VERSION,
-            "IdSync": get_idsync()
-        }
-
-        if full_sync:
-            payload["processes"] = get_processes()
-            payload["packages"] = get_installed_packages()
-            payload["updates"] = get_pending_updates()
-
-        log_info(f"Enviando dados: FullSync={payload['FullSync']}")
-        response = requests.post(API_URL, data=payload, timeout=30)
-        log_info(f"Resposta: {response.status_code} - {response.text.strip()}")
-    except Exception as e:
-        log_error(f"Erro durante sincronização: {e}")
-
-# ====================
-# Loop principal
-# ====================
 def main():
-    counter = 0
+    config = read_config()
+    if "IdSync" not in config:
+        print("Falta configuração IdSync em /etc/iwebit_agent.conf")
+        return
+
+    idsync = config["IdSync"]
+    log_flag = config.get("Log", "0")
+
+    hostname = get_hostname()
+    mac = get_mac()
+    device_type = get_device_type()
+    uniqueid = generate_uniqueid(idsync, hostname)
+    version = "1.0.0.0"
+
     while True:
-        full = (counter % 12 == 0)
-        sync(full_sync=full)
-        counter += 1
-        time.sleep(300)
+        # Minimal sync (FullSync=0)
+        data_minimal = {
+            "uniqueid": uniqueid,
+            "mac": mac,
+            "hostname": hostname,
+            "cpu": get_cpu(),
+            "memory": get_memory(),
+            "FullSync": 0,
+            "IdDeviceType": device_type,
+            "version": version,
+            "IdSync": idsync
+        }
+        send_data(data_minimal)
+        time.sleep(5 * 60)  # 5 minutos
+
+        # Full sync (FullSync=1)
+        data_full = data_minimal.copy()
+        data_full["FullSync"] = 1
+        data_full["processes"] = get_processes()
+        data_full["packages"] = get_packages()
+        data_full["updates"] = get_updates()
+
+        send_data(data_full)
+        time.sleep(55 * 60)  # 55 minutos para totalizar 60 minutos entre full syncs
 
 if __name__ == "__main__":
     main()
