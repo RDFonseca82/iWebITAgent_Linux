@@ -1,71 +1,43 @@
 #!/bin/bash
 
-# iwebit_agent - Script de instalação
-# https://github.com/RDFonseca82/iWebITAgent_Linux
+echo "Instalando iWebIT Agent..."
 
-AGENT_PATH="/usr/local/bin/iwebit_agent.py"
-SERVICE_PATH="/etc/systemd/system/iwebit_agent.service"
-CONFIG_PATH="/etc/iwebit_agent.conf"
-LOG_FILE="/var/log/iwebit_agent.log"
-
-echo "==============================="
-echo " iWebIT Agent - Instalação"
-echo "==============================="
-
-# Verifica permissões
-if [ "$EUID" -ne 0 ]; then
-  echo "Por favor, execute como root"
-  exit 1
+if [ "$(id -u)" -ne 0 ]; then
+    echo "Execute como root."
+    exit 1
 fi
 
-# Pergunta pelo IdSync
-read -p "Introduza o IdSync da empresa: " IDSYNC
-
-# Verifica se é válido
-if [[ -z "$IDSYNC" ]]; then
-  echo "IdSync inválido. Instalação cancelada."
-  exit 1
-fi
-
-# Instala dependências
-echo "Instalando dependências Python..."
 apt update -y
 apt install -y python3 python3-pip curl
 
-# Cria o arquivo de configuração
-echo "IdSync=${IDSYNC}" > "$CONFIG_PATH"
-echo "Log=1" >> "$CONFIG_PATH"
-chmod 600 "$CONFIG_PATH"
-echo "Configuração salva em $CONFIG_PATH"
+cp iwebit_agent.py /usr/local/bin/iwebit_agent.py
+chmod +x /usr/local/bin/iwebit_agent.py
 
-# Copia o script para o destino
-cp iwebit_agent.py "$AGENT_PATH"
-chmod +x "$AGENT_PATH"
+echo -n "Digite o IdSync para esta instalação: "
+read IDSYNC
 
-# Cria o serviço systemd
-cat <<EOF > "$SERVICE_PATH"
+mkdir -p /etc
+echo "IdSync=$IDSYNC" > /etc/iwebit_agent.conf
+echo "Log=1" >> /etc/iwebit_agent.conf
+chmod 600 /etc/iwebit_agent.conf
+
+cat >/etc/systemd/system/iwebit_agent.service <<EOF
 [Unit]
 Description=iWebIT Agent
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/python3 $AGENT_PATH
+ExecStart=/usr/bin/python3 /usr/local/bin/iwebit_agent.py
 Restart=always
+User=root
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-# Habilita e inicia o serviço
-systemctl daemon-reexec
 systemctl daemon-reload
-systemctl enable iwebit_agent.service
-systemctl start iwebit_agent.service
+systemctl enable iwebit_agent
+systemctl start iwebit_agent
 
-# Mostra status
-echo "Serviço instalado e iniciado:"
-systemctl status iwebit_agent --no-pager
-
-echo
-echo "Logs em tempo real: sudo tail -f $LOG_FILE"
-echo "Instalação concluída com sucesso!"
+echo "Instalação concluída e serviço iniciado."
+echo "Logs em /var/log/iwebit_agent.log"
