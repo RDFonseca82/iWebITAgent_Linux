@@ -15,7 +15,7 @@ from datetime import datetime
 # =================== CONFIG ===================
 CONFIG_FILE = '/opt/iwebit_agent/iwebit_agent.conf'
 # UNIQUEID_FILE = '/opt/iwebit_agent/uniqueid.conf'
-VERSION = '1.0.18.1'
+VERSION = '1.0.19.1'
 LOG_ENABLED = True
 LOG_FILE = '/var/log/iwebit_agent/iwebit_agent.log'
 UPDATE_URL = 'https://raw.githubusercontent.com/RDFonseca82/iWebITAgent_Linux/main/iwebit_agent.py'
@@ -78,8 +78,8 @@ def get_cpu_info():
         # Modelo e fabricante
         model_match = re.search(r'model name\s+:\s+(.+)', first_proc)
         vendor_match = re.search(r'vendor_id\s+:\s+(.+)', first_proc)
-        info['CPU_Model'] = model_match.group(1) if model_match else 'Unknown'
-        info['CPU_Vendor'] = vendor_match.group(1) if vendor_match else 'Unknown'
+        info['CPU_Model'] = model_match.group(1) if model_match else 'NULL'
+        info['CPU_Vendor'] = vendor_match.group(1) if vendor_match else 'NULL'
 
         # Cache L2 ou L3 (opcional)
         cache_match = re.search(r'cache size\s+:\s+(.+)', first_proc)
@@ -133,7 +133,7 @@ def get_current_user():
         import getpass
         return getpass.getuser()
     except Exception:
-        return "unknown"
+        return "NULL"
 
 def get_public_ip():
     try:
@@ -176,7 +176,7 @@ def get_all_installed_software():
                     "Name": name,
                     "Version": version,
                     "Identifier": identifier,
-                    "InstallDate": "Unknown"
+                    "InstallDate": "NULL"
                 })
     except Exception as e:
         pass
@@ -216,7 +216,7 @@ def get_all_installed_software():
                         "Name": app_id,
                         "Version": version,
                         "Identifier": app_id,
-                        "InstallDate": "Unknown"
+                        "InstallDate": "NULL"
                     })
     except Exception as e:
         pass
@@ -237,18 +237,18 @@ def run_dmidecode(keyword):
 def get_motherboard_info():
     output = run_dmidecode('baseboard')
     return {
-        "Manufacturer": re.search(r'Manufacturer:\s*(.+)', output).group(1) if re.search(r'Manufacturer:\s*(.+)', output) else "Unknown",
-        "Model": re.search(r'Product Name:\s*(.+)', output).group(1) if re.search(r'Product Name:\s*(.+)', output) else "Unknown",
-        "SerialNumber": re.search(r'Serial Number:\s*(.+)', output).group(1) if re.search(r'Serial Number:\s*(.+)', output) else "Unknown"
+        "Manufacturer": re.search(r'Manufacturer:\s*(.+)', output).group(1) if re.search(r'Manufacturer:\s*(.+)', output) else "NULL",
+        "Model": re.search(r'Product Name:\s*(.+)', output).group(1) if re.search(r'Product Name:\s*(.+)', output) else "NULL",
+        "SerialNumber": re.search(r'Serial Number:\s*(.+)', output).group(1) if re.search(r'Serial Number:\s*(.+)', output) else "NULL"
     }
 
 def get_bios_info():
     output = run_dmidecode('bios')
     return {
-        "BIOS_Manufacturer": re.search(r'Vendor:\s*(.+)', output).group(1) if re.search(r'Vendor:\s*(.+)', output) else "Unknown",
-        "BIOS_Version": re.search(r'Version:\s*(.+)', output).group(1) if re.search(r'Version:\s*(.+)', output) else "Unknown",
-        "BIOS_SerialNumber": re.search(r'Serial Number:\s*(.+)', output).group(1) if re.search(r'Serial Number:\s*(.+)', output) else "Unknown",
-        "BIOS_ReleaseDate": re.search(r'Release Date:\s*(.+)', output).group(1) if re.search(r'Release Date:\s*(.+)', output) else "Unknown"
+        "BIOS_Manufacturer": re.search(r'Vendor:\s*(.+)', output).group(1) if re.search(r'Vendor:\s*(.+)', output) else "NULL",
+        "BIOS_Version": re.search(r'Version:\s*(.+)', output).group(1) if re.search(r'Version:\s*(.+)', output) else "NULL",
+        "BIOS_SerialNumber": re.search(r'Serial Number:\s*(.+)', output).group(1) if re.search(r'Serial Number:\s*(.+)', output) else "NULL",
+        "BIOS_ReleaseDate": re.search(r'Release Date:\s*(.+)', output).group(1) if re.search(r'Release Date:\s*(.+)', output) else "NULL"
     }
 
 def get_os_info():
@@ -261,15 +261,15 @@ def get_os_info():
                     k, v = line.strip().split('=', 1)
                     info[k] = v.strip('"')
             return {
-                "OS_Name": info.get('PRETTY_NAME', 'Unknown'),
-                "OS_Version": info.get('VERSION', 'Unknown'),
-                "OS_ID": info.get('ID', 'Unknown')
+                "OS_Name": info.get('PRETTY_NAME', 'NULL'),
+                "OS_Version": info.get('VERSION', 'NULL'),
+                "OS_ID": info.get('ID', 'NULL')
             }
     except:
         return {
             "OS_Name": platform.system(),
             "OS_Version": platform.version(),
-            "OS_ID": "Unknown"
+            "OS_ID": "NULL"
         }
 
 def get_bios_last_upgrade_date():
@@ -326,11 +326,11 @@ def get_pending_updates():
 
             updates.append({
                 "Name": name,
-                "InstalledVersion": installed_version or "Unknown",
+                "InstalledVersion": installed_version or "NULL",
                 "NewVersion": new_version,
                 "Architecture": architecture,
-                "Origin": origin or "Unknown",
-                "ReleaseDate": release_date or "Unknown"
+                "Origin": origin or "NULL",
+                "ReleaseDate": release_date or "NULL"
             })
 
     except Exception as e:
