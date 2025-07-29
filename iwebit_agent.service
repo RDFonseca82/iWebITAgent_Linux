@@ -1,11 +1,10 @@
 [Unit]
-Description=iWebIT Agent Service
+Description=iWebIT Agent
 After=network.target
 
 [Service]
-Type=simple
-ExecStart=/usr/bin/env python3 /usr/local/bin/sync_agent.py
-Restart=on-failure
+ExecStart=/usr/bin/python3 /usr/local/bin/iwebit_agent.py
+Restart=always
 User=root
 
 [Install]
