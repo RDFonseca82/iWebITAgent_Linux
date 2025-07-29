@@ -15,7 +15,7 @@ from datetime import datetime
 # =================== CONFIG ===================
 CONFIG_FILE = '/opt/iwebit_agent/iwebit_agent.conf'
 # UNIQUEID_FILE = '/opt/iwebit_agent/uniqueid.conf'
-VERSION = '1.0.16.1'
+VERSION = '1.0.17.1'
 LOG_ENABLED = True
 LOG_FILE = '/var/log/iwebit_agent/iwebit_agent.log'
 UPDATE_URL = 'https://raw.githubusercontent.com/RDFonseca82/iWebITAgent_Linux/main/iwebit_agent.py'
@@ -85,11 +85,6 @@ def get_cpu_info():
         cache_match = re.search(r'cache size\s+:\s+(.+)', first_proc)
         if cache_match:
             info['Cache'] = cache_match.group(1)
-
-        # Flags (instruções suportadas)
-        flags_match = re.search(r'flags\s+:\s+(.+)', first_proc)
-        if flags_match:
-            info['CPU_Flags'] = flags_match.group(1).split()
 
     except Exception as e:
         info['Error'] = str(e)
