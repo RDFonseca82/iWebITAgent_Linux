@@ -34,11 +34,15 @@ def load_config():
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, 'r') as f:
             for line in f:
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
                 if '=' in line:
-                    key, value = line.strip().split('=', 1)
+                    key, value = line.split('=', 1)
                     config[key.strip()] = value.strip()
     LOG_ENABLED = config.get('Log', '0') == '1'
     return config
+
 
 # =================== DATA COLLECTION ===================
 def get_cpu_usage():
