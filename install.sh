@@ -1,58 +1,72 @@
-##!/bin/bash
+#!/bin/bash
 
-echo "🔧 A instalar o iWebIT Agent..."
+echo "==== iWebIT Agent - Instalação ===="
 
+# Confirmar permissões
+if [ "$EUID" -ne 0 ]; then
+  echo "Por favor execute como root: sudo ./install.sh"
+  exit 1
+fi
+
+# Solicitar o IdSync
+read -p "Introduza o IdSync da máquina: " IDSYNC
+
+# Diretórios
 INSTALL_DIR="/opt/iwebit_agent"
-CONFIG_FILE="/etc/iwebit_agent.conf"
-SERVICE_FILE="/etc/systemd/system/iwebit_agent.service"
-AGENT_SCRIPT="iwebit_agent.py"
-CONF_SCRIPT="iwebit_agent.conf"
-SERVICE_SCRIPT="iwebit_agent.service"
-LOG_FILE="/var/log/iwebit_agent.log"
+LOG_DIR="/var/log/iwebit_agent"
 
-# Perguntar IdSync ao utilizador
-read -p "Por favor, introduza o IdSync (identificador da sincronização): " ID_SYNC
+# Criar diretórios
+mkdir -p "$INSTALL_DIR"
+mkdir -p "$LOG_DIR"
 
-if [ -z "$ID_SYNC" ]; then
-    echo "❌ IdSync não pode estar vazio. Abortando instalação."
-    exit 1
+# Copiar ficheiros
+cp iwebit_agent.py "$INSTALL_DIR/"
+cp iwebit_agent.conf "$INSTALL_DIR/"
+cp requirements.txt "$INSTALL_DIR/"
+
+# Atualizar IdSync no ficheiro de configuração
+sed -i "s/^IdSync = .*/IdSync = $IDSYNC/" "$INSTALL_DIR/iwebit_agent.conf"
+
+# Gerar UniqueId persistente
+HOSTNAME=$(hostname)
+UNIQUE_ID=$(echo -n "${IDSYNC}_${HOSTNAME}" | sha256sum | awk '{print $1}')
+
+# Atualizar ou adicionar UniqueId ao ficheiro de configuração
+if grep -q "^UniqueId =" "$INSTALL_DIR/iwebit_agent.conf"; then
+  sed -i "s/^UniqueId = .*/UniqueId = $UNIQUE_ID/" "$INSTALL_DIR/iwebit_agent.conf"
+else
+  echo "UniqueId = $UNIQUE_ID" >> "$INSTALL_DIR/iwebit_agent.conf"
 fi
 
-# Criar diretório de instalação
-echo "📁 Criando diretório: $INSTALL_DIR"
-sudo mkdir -p $INSTALL_DIR
+# Criar ficheiro do serviço
+cat <<EOF > /etc/systemd/system/iwebit_agent.service
+[Unit]
+Description=iWebIT Agent
+After=network.target
 
-# Copiar scripts para o diretório
-echo "📄 Copiando scripts para $INSTALL_DIR"
-sudo cp $AGENT_SCRIPT $INSTALL_DIR/
-sudo chmod +x $INSTALL_DIR/$AGENT_SCRIPT
+[Service]
+ExecStart=/usr/bin/python3 /opt/iwebit_agent/iwebit_agent.py
+WorkingDirectory=/opt/iwebit_agent/
+Restart=always
+User=root
 
-# Criar/atualizar ficheiro de configuração com o IdSync fornecido
-echo "⚙️ Criando/atualizando ficheiro de configuração em $CONFIG_FILE"
-
-sudo bash -c "cat > $CONFIG_FILE <<EOF
-# Configuração do iWebIT Agent
-IdSync=$ID_SYNC
-Log=0
+[Install]
+WantedBy=multi-user.target
 EOF
-"
 
-# Copiar serviço systemd
-echo "🛠️ Instalando serviço systemd"
-sudo cp $SERVICE_SCRIPT $SERVICE_FILE
-sudo systemctl daemon-reexec
-sudo systemctl daemon-reload
-sudo systemctl enable iwebit_agent.service
+# Instalar dependências necessárias
+echo "A instalar dependências..."
+apt update
+apt install -y python3 python3-psutil python3-requests curl
 
-# Criar ficheiro de log se não existir
-if [ ! -f "$LOG_FILE" ]; then
-    sudo touch $LOG_FILE
-    sudo chmod 666 $LOG_FILE
-fi
+# Permissões
+chmod +x "$INSTALL_DIR/iwebit_agent.py"
 
-# Iniciar serviço
-echo "🚀 A iniciar o serviço..."
-sudo systemctl restart iwebit_agent.service
+# Ativar o serviço
+systemctl daemon-reexec
+systemctl daemon-reload
+systemctl enable iwebit_agent.service
+systemctl restart iwebit_agent.service
 
-echo "✅ Instalação concluída com sucesso!"
-echo "📌 O IdSync foi configurado como: $ID_SYNC"
+echo "==== Instalação concluída ===="
+echo "O serviço iwebit_agent está agora ativo e configurado."
