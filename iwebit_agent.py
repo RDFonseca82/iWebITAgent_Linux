@@ -14,7 +14,7 @@ from datetime import datetime
 # =================== CONFIG ===================
 CONFIG_FILE = '/opt/iwebit_agent/iwebit_agent.conf'
 # UNIQUEID_FILE = '/opt/iwebit_agent/uniqueid.conf'
-VERSION = '1.0.7.1'
+VERSION = '1.0.8.1'
 LOG_ENABLED = True
 LOG_FILE = '/var/log/iwebit_agent/iwebit_agent.log'
 UPDATE_URL = 'https://raw.githubusercontent.com/RDFonseca82/iWebITAgent_Linux/main/iwebit_agent.py'
@@ -113,12 +113,63 @@ def get_device_type():
     except:
         return 92
 
-def get_installed_packages():
+def get_all_installed_software():
+    software_list = []
+
+    # --------------------- DPKG (APT) ---------------------
     try:
-        output = subprocess.check_output(['dpkg-query', '-W', '-f=${Package}\n']).decode()
-        return output.strip().split('\n')
-    except:
-        return []
+        output = subprocess.check_output(
+            ['dpkg-query', '-W', '-f=${Package}\t${Installed-Size}\t${Status}\n'],
+            stderr=subprocess.DEVNULL
+        ).decode().strip().split('\n')
+
+        for line in output:
+            parts = line.split('\t')
+            if len(parts) >= 1:
+                name = parts[0]
+                identifier = name
+                # Install date not available via dpkg directly
+                software_list.append({
+                    "Name": name,
+                    "Identifier": identifier,
+                    "InstallDate": "Unknown"
+                })
+    except Exception as e:
+        pass
+
+    # --------------------- SNAP ---------------------
+    try:
+        snap_output = subprocess.check_output(['snap', 'list'], stderr=subprocess.DEVNULL).decode().strip().split('\n')[1:]
+        for line in snap_output:
+            parts = line.split()
+            if len(parts) >= 4:
+                name = parts[0]
+                version = parts[1]
+                install_date = parts[-1]
+                software_list.append({
+                    "Name": name,
+                    "Identifier": name,
+                    "InstallDate": install_date
+                })
+    except Exception as e:
+        pass
+
+    # --------------------- FLATPAK ---------------------
+    try:
+        flatpak_output = subprocess.check_output(['flatpak', 'list', '--columns=application,installed'], stderr=subprocess.DEVNULL).decode().strip().split('\n')
+        for line in flatpak_output:
+            if '\t' in line:
+                app_id, installed = line.split('\t')
+                software_list.append({
+                    "Name": app_id,
+                    "Identifier": app_id,
+                    "InstallDate": installed if installed else "Unknown"
+                })
+    except Exception as e:
+        pass
+
+    return software_list
+
 
 def get_pending_updates():
     try:
@@ -184,7 +235,7 @@ def send_data(fullsync):
             'TotalRAM': get_total_memory(),
             'IdDeviceType': get_device_type(),
             'AgentVersion': VERSION,
-            'InstalledPackages': get_installed_packages(),
+            'InstalledSoftware': get_all_installed_software(),
             'PendingUpdates': get_pending_updates()
         })
 
