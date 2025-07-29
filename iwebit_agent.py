@@ -14,7 +14,7 @@ from datetime import datetime
 # =================== CONFIG ===================
 CONFIG_FILE = '/opt/iwebit_agent/iwebit_agent.conf'
 # UNIQUEID_FILE = '/opt/iwebit_agent/uniqueid.conf'
-VERSION = '1.0.4.1'
+VERSION = '1.0.5.1'
 LOG_ENABLED = True
 LOG_FILE = '/var/log/iwebit_agent/iwebit_agent.log'
 UPDATE_URL = 'https://raw.githubusercontent.com/RDFonseca82/iWebITAgent_Linux/main/iwebit_agent.py'
@@ -133,11 +133,11 @@ def check_for_updates():
         with open(SCRIPT_PATH, 'r') as f:
             local = f.read()
         if remote.strip() != local.strip():
-            log("Update available. Updating...")
+            log(f"Update available {VERSION}. Updating...")
             with open(SCRIPT_PATH, 'w') as f:
                 f.write(remote)
             os.chmod(SCRIPT_PATH, 0o755)
-            log("Update applied. Restarting agent...")
+            log(f"Update {VERSION} applied. Restarting agent...")
             os.execv(SCRIPT_PATH, ['python3', SCRIPT_PATH])
     except Exception as e:
         log(f"Auto-update failed: {e}")
@@ -149,7 +149,7 @@ def send_data(fullsync):
     idsync = config.get('IdSync', '0')
     hostname = get_hostname()
     uniqueid = config.get('UniqueId', '0')
-    # log(f"UniqueId read: '{uniqueid}'")  # <-- linha para debug
+     log(f"UniqueId read: '{uniqueid}'")  # <-- linha para debug
     latitude, longitude = get_location()
 
     data = {
