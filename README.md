@@ -4,6 +4,7 @@ Certifique-se de que o sistema tem os seguintes pacotes:
 sudo apt update
 sudo apt install -y git curl python3 python3-pip systemd
 
+----------------------------------------------------------------------------
 
 🚀 Passo a passo de instalação
 
@@ -22,6 +23,7 @@ sudo systemctl status iwebit_agent
 Durante a instalação será solicitado o IdSync (identificador da empresa ou cliente).
 
 
+-------------------------------------------------------------------------------------
 
 🚀 Desisntalar iWebItAgent
 
@@ -39,11 +41,13 @@ sudo rm -rf /opt/iwebit_agent
 sudo rm -rf /var/log/iwebit_agent
 
 
+----------------------------------------------------------------------------------------
 
 #Verificar versão
 
 grep "VERSION" /opt/iwebit_agent/iwebit_agent.py
 
+----------------------------------------------------------------------------------------
 
 #Verificar o status do serviço
 
