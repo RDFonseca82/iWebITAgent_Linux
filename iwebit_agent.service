@@ -3,7 +3,6 @@ Description=iWebIT Agent
 After=network.target
 
 [Service]
-Type=simple
 ExecStart=/usr/bin/python3 /opt/iwebit_agent/iwebit_agent.py
 Restart=always
 RestartSec=10
@@ -12,4 +11,3 @@ StandardError=append:/var/log/iwebit_agent.log
 
 [Install]
 WantedBy=multi-user.target
-
