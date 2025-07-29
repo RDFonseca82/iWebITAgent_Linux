@@ -12,7 +12,7 @@ import shutil
 from datetime import datetime
 
 # =================== CONFIG ===================
-CONFIG_FILE = '/opt/iwebit_agent/config.conf'
+CONFIG_FILE = '/opt/iwebit_agent/iwebit_agent.conf'
 UNIQUEID_FILE = '/opt/iwebit_agent/uniqueid.conf'
 VERSION = '1.0.3.1'
 LOG_ENABLED = False
