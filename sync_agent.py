@@ -1,164 +1,166 @@
 #!/usr/bin/env python3
+
 import os
+import sys
 import time
 import json
-import uuid
-import psutil
-import netifaces
-import platform
+import logging
+import requests
 import socket
 import subprocess
-import requests
-import distro
+import hashlib
+from datetime import datetime
 
+# ====================
+# Configurações
+# ====================
 API_URL = "https://agent.iwebit.app/scripts/script_Linux.php"
-SYNC_FILE = "/etc/sync_agent_uniqueid"
-IDSYNC_FILE = "/etc/sync_agent_idsync"
-VERSION_FILE = "/etc/iwebit_agent_version"
-GITHUB_VERSION_URL = "https://raw.githubusercontent.com/RDFonseca82/iWebITAgent_Linux/main/version.txt"
-AGENT_VERSION = "1.0.0.0"
+UNIQUE_ID_FILE = "/etc/iwebit_agent_id"
+CONFIG_FILE = "/etc/iwebit_agent.conf"
+VERSION = "1.0.0.0"
+LOG = 1  # 1 = ativo, 0 = desativo
+LOG_FILE = "/var/log/iwebit_agent.log"
 
-def get_unique_id():
-    if os.path.exists(SYNC_FILE):
-        with open(SYNC_FILE, 'r') as f:
-            return f.read().strip()
-    unique_id = str(uuid.uuid4())
-    with open(SYNC_FILE, 'w') as f:
-        f.write(unique_id)
-    return unique_id
+# ====================
+# Logging
+# ====================
+if LOG:
+    os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
+    logging.basicConfig(
+        filename=LOG_FILE,
+        level=logging.DEBUG,
+        format="%(asctime)s - %(levelname)s - %(message)s"
+    )
+    logging.debug("Logging ativado.")
+else:
+    logging.basicConfig(level=logging.CRITICAL)
 
-def get_idsync():
-    if os.path.exists(IDSYNC_FILE):
-        with open(IDSYNC_FILE, 'r') as f:
-            return f.read().strip()
-    return ""
+def log_info(msg): logging.info(msg) if LOG else None
+def log_error(msg): logging.error(msg) if LOG else None
 
-def get_mac_address():
-    for iface in netifaces.interfaces():
-        addrs = netifaces.ifaddresses(iface)
-        if netifaces.AF_LINK in addrs:
-            for addr in addrs[netifaces.AF_LINK]:
-                mac = addr.get('addr')
-                if mac and mac != '00:00:00:00:00:00':
-                    return mac
-    return "00:00:00:00:00:00"
-
-def get_cpu_usage():
-    return psutil.cpu_percent(interval=1)
-
-def get_memory_usage():
-    mem = psutil.virtual_memory()
-    return mem.percent
-
-def get_process_list():
-    return [proc.info for proc in psutil.process_iter(['pid', 'name'])]
-
-def get_installed_packages():
+# ====================
+# Funções Utilitárias
+# ====================
+def get_hostname():
     try:
-        output = subprocess.check_output(['dpkg', '-l']).decode()
-        return output
-    except Exception as e:
-        return str(e)
-
-def get_pending_updates():
-    try:
-        output = subprocess.check_output(['apt', 'list', '--upgradable']).decode()
-        return output
-    except Exception as e:
-        return str(e)
-
-def get_device_type():
-    info = platform.uname()
-    if 'server' in info.node.lower():
-        return 109
-    return 92
-
-def get_network_info():
-    interfaces = {}
-    for iface in netifaces.interfaces():
-        iface_data = {}
-        addrs = netifaces.ifaddresses(iface)
-        if netifaces.AF_INET in addrs:
-            iface_data['ip'] = addrs[netifaces.AF_INET][0]['addr']
-        if netifaces.AF_LINK in addrs:
-            iface_data['mac'] = addrs[netifaces.AF_LINK][0]['addr']
-        interfaces[iface] = iface_data
-    return interfaces
-
-def get_storage_info():
-    disks = []
-    for part in psutil.disk_partitions():
-        usage = psutil.disk_usage(part.mountpoint)
-        disks.append({
-            'device': part.device,
-            'mountpoint': part.mountpoint,
-            'fstype': part.fstype,
-            'total': usage.total,
-            'used': usage.used,
-            'free': usage.free,
-            'percent': usage.percent
-        })
-    return disks
-
-def get_firewall_status():
-    try:
-        output = subprocess.check_output(['ufw', 'status'], stderr=subprocess.DEVNULL).decode()
-        return output
-    except:
-        return "ufw not installed or inaccessible"
-
-def get_ssh_status():
-    try:
-        output = subprocess.check_output(['systemctl', 'is-active', 'ssh'], stderr=subprocess.DEVNULL).decode().strip()
-        return output
+        return socket.gethostname()
     except:
         return "unknown"
 
-def check_for_update():
+def get_idsync():
     try:
-        remote_version = requests.get(GITHUB_VERSION_URL, timeout=5).text.strip()
-        if remote_version > AGENT_VERSION:
-            os.system("curl -sSL https://raw.githubusercontent.com/RDFonseca82/iWebITAgent_Linux/main/iwebit_agent.py -o /usr/local/bin/iwebit_agent.py")
-            os.system("systemctl restart iwebit_agent")
-    except:
-        pass
-
-def sync(full=False):
-    data = {
-        "uniqueid": get_unique_id(),
-        "idsync": get_idsync(),
-        "mac_address": get_mac_address(),
-        "cpu_usage": get_cpu_usage(),
-        "memory_usage": get_memory_usage(),
-        "fullsync": 1 if full else 0,
-        "iddevicetype": get_device_type(),
-        "agent_version": AGENT_VERSION,
-    }
-
-    if full:
-        data.update({
-            "process_list": json.dumps(get_process_list()),
-            "network_info": json.dumps(get_network_info()),
-            "storage_info": json.dumps(get_storage_info()),
-            "firewall_status": get_firewall_status(),
-            "ssh_status": get_ssh_status(),
-            "installed_packages": get_installed_packages(),
-            "pending_updates": get_pending_updates(),
-        })
-
-    try:
-        requests.post(API_URL, data=data, timeout=10)
+        if os.path.exists(CONFIG_FILE):
+            with open(CONFIG_FILE, "r") as f:
+                for line in f:
+                    if line.startswith("IdSync="):
+                        return line.strip().split("=")[1]
     except Exception as e:
-        pass
+        log_error(f"Erro ao ler IdSync: {e}")
+    return "0"
 
+def generate_unique_id():
+    try:
+        hostname = get_hostname()
+        idsync = get_idsync()
+        combined = f"{idsync}-{hostname}"
+        unique_id = hashlib.sha256(combined.encode()).hexdigest()
+        return unique_id
+    except Exception as e:
+        log_error(f"Erro ao gerar unique ID: {e}")
+        return "unknown"
+
+def get_mac_address():
+    try:
+        result = subprocess.check_output("ip link show", shell=True).decode()
+        for line in result.splitlines():
+            if "link/ether" in line:
+                return line.strip().split()[1]
+    except Exception as e:
+        log_error(f"Erro ao obter MAC address: {e}")
+    return "00:00:00:00:00:00"
+
+def get_cpu_mem():
+    try:
+        cpu = subprocess.check_output("top -bn1 | grep '%Cpu'", shell=True).decode()
+        mem = subprocess.check_output("free -m", shell=True).decode()
+        return {"cpu": cpu.strip(), "memory": mem.strip()}
+    except Exception as e:
+        log_error(f"Erro ao obter CPU/Memória: {e}")
+        return {}
+
+def get_processes():
+    try:
+        ps = subprocess.check_output("ps aux", shell=True).decode()
+        return ps.strip()
+    except Exception as e:
+        log_error(f"Erro ao obter processos: {e}")
+        return ""
+
+def get_installed_packages():
+    try:
+        result = subprocess.check_output("dpkg -l", shell=True).decode()
+        return result
+    except Exception as e:
+        log_error(f"Erro ao obter pacotes: {e}")
+        return ""
+
+def get_pending_updates():
+    try:
+        result = subprocess.check_output("apt list --upgradable 2>/dev/null", shell=True).decode()
+        return result
+    except Exception as e:
+        log_error(f"Erro ao obter atualizações pendentes: {e}")
+        return ""
+
+def is_server():
+    try:
+        result = subprocess.check_output("systemctl list-units --type=service", shell=True).decode()
+        return "apache2" in result or "nginx" in result or "mysql" in result
+    except:
+        return False
+
+# ====================
+# Função principal
+# ====================
+def sync(full_sync=False):
+    try:
+        unique_id = generate_unique_id()
+        mac = get_mac_address()
+        cpu_mem = get_cpu_mem()
+
+        payload = {
+            "uniqueid": unique_id,
+            "mac": mac,
+            "hostname": get_hostname(),
+            "cpu": cpu_mem.get("cpu", ""),
+            "memory": cpu_mem.get("memory", ""),
+            "FullSync": 1 if full_sync else 0,
+            "IdDeviceType": 109 if is_server() else 92,
+            "version": VERSION,
+            "IdSync": get_idsync()
+        }
+
+        if full_sync:
+            payload["processes"] = get_processes()
+            payload["packages"] = get_installed_packages()
+            payload["updates"] = get_pending_updates()
+
+        log_info(f"Enviando dados: FullSync={payload['FullSync']}")
+        response = requests.post(API_URL, data=payload, timeout=30)
+        log_info(f"Resposta: {response.status_code} - {response.text.strip()}")
+    except Exception as e:
+        log_error(f"Erro durante sincronização: {e}")
+
+# ====================
+# Loop principal
+# ====================
 def main():
     counter = 0
     while True:
-        full = counter % 12 == 0
-        check_for_update()
-        sync(full=full)
+        full = (counter % 12 == 0)
+        sync(full_sync=full)
         counter += 1
-        time.sleep(300)  # 5 minutes
+        time.sleep(300)
 
 if __name__ == "__main__":
     main()
