@@ -97,7 +97,11 @@ def get_logged_users():
     return len(psutil.users())
 
 def get_current_user():
-    return os.getlogin()
+    try:
+        import getpass
+        return getpass.getuser()
+    except Exception:
+        return "unknown"
 
 def get_public_ip():
     try:
