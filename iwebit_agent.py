@@ -14,7 +14,7 @@ from datetime import datetime
 # =================== CONFIG ===================
 CONFIG_FILE = '/opt/iwebit_agent/iwebit_agent.conf'
 # UNIQUEID_FILE = '/opt/iwebit_agent/uniqueid.conf'
-VERSION = '1.0.10.1'
+VERSION = '1.0.11.1'
 LOG_ENABLED = True
 LOG_FILE = '/var/log/iwebit_agent/iwebit_agent.log'
 UPDATE_URL = 'https://raw.githubusercontent.com/RDFonseca82/iWebITAgent_Linux/main/iwebit_agent.py'
@@ -193,6 +193,14 @@ def check_for_updates():
     except Exception as e:
         log(f"Auto-update failed: {e}")
 
+def is_connected():
+    try:
+        subprocess.check_output(["ping", "-c", "1", "-W", "2", "8.8.8.8"], stderr=subprocess.DEVNULL)
+        return True
+    except subprocess.CalledProcessError:
+        return False
+
+
 # =================== SYNC ===================
 def send_data(fullsync):
     config = load_config()
@@ -297,8 +305,22 @@ if __name__ == '__main__':
     last_remote_check = 0
     remote_check_interval = 2 * 60  # 2 minutos
 
+    # Aguarda até haver conexão
+    while not is_connected():
+        log("Sem acesso à internet. Aguardando conexão...")
+        time.sleep(30)
+
+    log("Conexão com a internet estabelecida. Iniciando agente.")
+
+
     while True:
+        if not is_connected():
+            log("Sem conexão com a internet. Pulando execução...")
+            time.sleep(minimal_interval)
+            continue
+        
         now = time.time()
+        
         if now - last_fullsync >= full_interval:
             log("Performing FULL sync")
             send_data(fullsync=True)
