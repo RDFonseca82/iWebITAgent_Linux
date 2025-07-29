@@ -43,9 +43,30 @@ sudo rm -rf /var/log/iwebit_agent
 
 ----------------------------------------------------------------------------------------
 
-#Verificar versão
+# Verificar versão do Agente
 
 grep "VERSION" /opt/iwebit_agent/iwebit_agent.py
+
+----------------------------------------------------------------------------------------
+
+# Ativar logs
+
+Editar o ficheiro /opt/iwebit_agent/iwebit_agent.conf
+
+Alterar o valor Log = 1
+
+Ver os logs em /var/log/iwebit_agent/iwebit_agent.log
+
+
+----------------------------------------------------------------------------------------
+
+# Ativar Debug JSON
+
+Editar o ficheiro /opt/iwebit_agent/iwebit_agent.conf
+
+Alterar o valor Debug = 1
+
+Ver o ficheiro JSON a ser enviado em /opt/iwebit_agent/iwebit_send.json
 
 ----------------------------------------------------------------------------------------
 
