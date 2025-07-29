@@ -14,7 +14,7 @@ from datetime import datetime
 # =================== CONFIG ===================
 CONFIG_FILE = '/opt/iwebit_agent/iwebit_agent.conf'
 # UNIQUEID_FILE = '/opt/iwebit_agent/uniqueid.conf'
-VERSION = '1.0.8.1'
+VERSION = '1.0.9.1'
 LOG_ENABLED = True
 LOG_FILE = '/var/log/iwebit_agent/iwebit_agent.log'
 UPDATE_URL = 'https://raw.githubusercontent.com/RDFonseca82/iWebITAgent_Linux/main/iwebit_agent.py'
@@ -203,6 +203,7 @@ def send_data(fullsync):
     # log(f"UniqueId read: '{uniqueid}'")  # <-- linha para debug
     latitude, longitude = get_location()
     current_datetime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    debug_enabled = config.get('Debug', '0') == '1'
 
     data = {
         'IdSync': idsync,
@@ -239,6 +240,16 @@ def send_data(fullsync):
             'PendingUpdates': get_pending_updates()
         })
 
+    # Salvar JSON se Debug=1
+    if debug_enabled:
+        try:
+            with open('/opt/iwebit_agent/iwebit_send.json', 'w') as json_file:
+                json.dump(data, json_file, indent=4)
+            log("Debug ativo: JSON enviado salvo em iwebit_send.json")
+        except Exception as e:
+            log(f"Erro ao gravar JSON de debug: {e}")
+            
+    
     try:
         headers = {'Content-Type': 'application/json'}
         response = requests.post(API_URL, json=data, headers=headers)
