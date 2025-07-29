@@ -154,7 +154,7 @@ def send_data(fullsync):
 
     data = {
         'IdSync': idsync,
-        'UniqueId': uniqueid,
+        'uniqueid': uniqueid,
         'FullSync': 1 if fullsync else 0,
         'CPUUsage': get_cpu_usage(),
         'MemoryUsage': get_memory_usage(),
