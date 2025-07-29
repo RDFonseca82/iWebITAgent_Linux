@@ -9,12 +9,13 @@ import subprocess
 import hashlib
 import requests
 import shutil
+import re
 from datetime import datetime
 
 # =================== CONFIG ===================
 CONFIG_FILE = '/opt/iwebit_agent/iwebit_agent.conf'
 # UNIQUEID_FILE = '/opt/iwebit_agent/uniqueid.conf'
-VERSION = '1.0.14.1'
+VERSION = '1.0.15.1'
 LOG_ENABLED = True
 LOG_FILE = '/var/log/iwebit_agent/iwebit_agent.log'
 UPDATE_URL = 'https://raw.githubusercontent.com/RDFonseca82/iWebITAgent_Linux/main/iwebit_agent.py'
@@ -180,6 +181,66 @@ def get_all_installed_software():
 
     return software_list
 
+
+
+def run_dmidecode(keyword):
+    try:
+        output = subprocess.check_output(['dmidecode', '-t', keyword], text=True, stderr=subprocess.DEVNULL)
+        return output
+    except subprocess.CalledProcessError:
+        return ''
+    except PermissionError:
+        return 'Permission denied (requires sudo)'
+
+def get_motherboard_info():
+    output = run_dmidecode('baseboard')
+    return {
+        "Manufacturer": re.search(r'Manufacturer:\s*(.+)', output).group(1) if re.search(r'Manufacturer:\s*(.+)', output) else "Unknown",
+        "Model": re.search(r'Product Name:\s*(.+)', output).group(1) if re.search(r'Product Name:\s*(.+)', output) else "Unknown",
+        "SerialNumber": re.search(r'Serial Number:\s*(.+)', output).group(1) if re.search(r'Serial Number:\s*(.+)', output) else "Unknown"
+    }
+
+def get_bios_info():
+    output = run_dmidecode('bios')
+    return {
+        "BIOS_Manufacturer": re.search(r'Vendor:\s*(.+)', output).group(1) if re.search(r'Vendor:\s*(.+)', output) else "Unknown",
+        "BIOS_Version": re.search(r'Version:\s*(.+)', output).group(1) if re.search(r'Version:\s*(.+)', output) else "Unknown",
+        "BIOS_SerialNumber": re.search(r'Serial Number:\s*(.+)', output).group(1) if re.search(r'Serial Number:\s*(.+)', output) else "Unknown",
+        "BIOS_ReleaseDate": re.search(r'Release Date:\s*(.+)', output).group(1) if re.search(r'Release Date:\s*(.+)', output) else "Unknown"
+    }
+
+def get_os_info():
+    try:
+        with open('/etc/os-release') as f:
+            lines = f.readlines()
+            info = {}
+            for line in lines:
+                if '=' in line:
+                    k, v = line.strip().split('=', 1)
+                    info[k] = v.strip('"')
+            return {
+                "OS_Name": info.get('PRETTY_NAME', 'Unknown'),
+                "OS_Version": info.get('VERSION', 'Unknown'),
+                "OS_ID": info.get('ID', 'Unknown')
+            }
+    except:
+        return {
+            "OS_Name": platform.system(),
+            "OS_Version": platform.version(),
+            "OS_ID": "Unknown"
+        }
+
+def get_bios_last_upgrade_date():
+    try:
+        output = subprocess.check_output(['stat', '/sys/class/dmi/id/bios_date'], text=True)
+        match = re.search(r'Modify:\s(.+)', output)
+        if match:
+            return match.group(1)
+    except:
+        pass
+    return "Unknown"
+
+
 def get_pending_updates():
     try:
         output = subprocess.check_output(['apt', 'list', '--upgradeable'], stderr=subprocess.DEVNULL).decode()
@@ -254,7 +315,11 @@ def send_data(fullsync):
             'IdDeviceType': get_device_type(),
             'AgentVersion': VERSION,
             'InstalledSoftware': get_all_installed_software(),
-            'PendingUpdates': get_pending_updates()
+            'PendingUpdates': get_pending_updates(),
+            'BiosUpgrade': get_bios_last_upgrade_date(),
+            'OS_Info': get_os_info(),
+            'Bios_Info': get_bios_info(),
+            'MB_Info': get_motherboard_info()           
         })
 
     # Salvar JSON se Debug=1
