@@ -24,8 +24,12 @@ cp iwebit_agent.py "$INSTALL_DIR/"
 cp iwebit_agent.conf "$INSTALL_DIR/"
 cp requirements.txt "$INSTALL_DIR/"
 
-# Atualizar IdSync no ficheiro de configuração
-sed -i "s/^IdSync = .*/IdSync = $IDSYNC/" "$INSTALL_DIR/iwebit_agent.conf"
+# Atualizar ou adicionar IdSync no ficheiro de configuração
+if grep -q "^IdSync" "$INSTALL_DIR/iwebit_agent.conf"; then
+  sed -i "s/^IdSync.*/IdSync = $IDSYNC/" "$INSTALL_DIR/iwebit_agent.conf"
+else
+  echo "IdSync = $IDSYNC" >> "$INSTALL_DIR/iwebit_agent.conf"
+fi
 
 # Gerar UniqueId persistente
 HOSTNAME=$(hostname)
