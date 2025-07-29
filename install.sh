@@ -1,43 +1,50 @@
 #!/bin/bash
 
-echo "Instalando iWebIT Agent..."
+echo "🔧 A instalar o iWebIT Agent..."
 
-if [ "$(id -u)" -ne 0 ]; then
-    echo "Execute como root."
-    exit 1
+# Caminhos
+INSTALL_DIR="/opt/iwebit_agent"
+CONFIG_FILE="/etc/iwebit_agent.conf"
+SERVICE_FILE="/etc/systemd/system/iwebit_agent.service"
+AGENT_SCRIPT="iwebit_agent.py"
+CONF_SCRIPT="iwebit_agent.conf"
+SERVICE_SCRIPT="iwebit_agent.service"
+LOG_FILE="/var/log/iwebit_agent.log"
+
+# Cria diretório
+echo "📁 Criando diretório: $INSTALL_DIR"
+sudo mkdir -p $INSTALL_DIR
+
+# Copia scripts
+echo "📄 Copiando scripts para $INSTALL_DIR"
+sudo cp $AGENT_SCRIPT $INSTALL_DIR/
+sudo chmod +x $INSTALL_DIR/$AGENT_SCRIPT
+
+# Copia config
+echo "⚙️ Instalando configuração para $CONFIG_FILE"
+if [ ! -f "$CONFIG_FILE" ]; then
+    sudo cp $CONF_SCRIPT $CONFIG_FILE
+    echo "🔐 Por favor edite o ficheiro /etc/iwebit_agent.conf e defina o IdSync antes de iniciar o agente."
+else
+    echo "⚠️ Ficheiro de configuração já existe, não será substituído."
 fi
 
-apt update -y
-apt install -y python3 python3-pip curl
+# Copia serviço systemd
+echo "🛠️ Instalando serviço systemd"
+sudo cp $SERVICE_SCRIPT $SERVICE_FILE
+sudo systemctl daemon-reexec
+sudo systemctl daemon-reload
+sudo systemctl enable iwebit_agent.service
 
-cp iwebit_agent.py /usr/local/bin/iwebit_agent.py
-chmod +x /usr/local/bin/iwebit_agent.py
+# Cria log (opcional)
+if [ ! -f "$LOG_FILE" ]; then
+    sudo touch $LOG_FILE
+    sudo chmod 666 $LOG_FILE
+fi
 
-echo -n "Digite o IdSync para esta instalação: "
-read IDSYNC
+# Inicia serviço
+echo "🚀 A iniciar o serviço..."
+sudo systemctl restart iwebit_agent.service
 
-mkdir -p /etc
-echo "IdSync=$IDSYNC" > /etc/iwebit_agent.conf
-echo "Log=1" >> /etc/iwebit_agent.conf
-chmod 600 /etc/iwebit_agent.conf
-
-cat >/etc/systemd/system/iwebit_agent.service <<EOF
-[Unit]
-Description=iWebIT Agent
-After=network.target
-
-[Service]
-ExecStart=/usr/bin/python3 /usr/local/bin/iwebit_agent.py
-Restart=always
-User=root
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-systemctl daemon-reload
-systemctl enable iwebit_agent
-systemctl start iwebit_agent
-
-echo "Instalação concluída e serviço iniciado."
-echo "Logs em /var/log/iwebit_agent.log"
+echo "✅ Instalação completa!"
+echo "📌 Edita o ficheiro /etc/iwebit_agent.conf para configurares o IdSync antes da primeira execução real."
