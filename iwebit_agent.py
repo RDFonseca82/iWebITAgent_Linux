@@ -14,7 +14,7 @@ from datetime import datetime
 # =================== CONFIG ===================
 CONFIG_FILE = '/opt/iwebit_agent/iwebit_agent.conf'
 # UNIQUEID_FILE = '/opt/iwebit_agent/uniqueid.conf'
-VERSION = '1.0.13.1'
+VERSION = '1.0.14.1'
 LOG_ENABLED = True
 LOG_FILE = '/var/log/iwebit_agent/iwebit_agent.log'
 UPDATE_URL = 'https://raw.githubusercontent.com/RDFonseca82/iWebITAgent_Linux/main/iwebit_agent.py'
@@ -119,18 +119,19 @@ def get_all_installed_software():
     # --------------------- DPKG (APT) ---------------------
     try:
         output = subprocess.check_output(
-            ['dpkg-query', '-W', '-f=${Package}\t${Installed-Size}\t${Status}\n'],
+            ['dpkg-query', '-W', '-f=${Package}\t${Version}\t${Installed-Size}\t${Status}\n'],
             stderr=subprocess.DEVNULL
         ).decode().strip().split('\n')
 
         for line in output:
             parts = line.split('\t')
-            if len(parts) >= 1:
+            if len(parts) >= 2:
                 name = parts[0]
+                version = parts[1]
                 identifier = name
-                # Install date not available via dpkg directly
                 software_list.append({
                     "Name": name,
+                    "Version": version,
                     "Identifier": identifier,
                     "InstallDate": "Unknown"
                 })
@@ -138,7 +139,6 @@ def get_all_installed_software():
         pass
 
     # --------------------- SNAP ---------------------
-    '''
     try:
         snap_output = subprocess.check_output(['snap', 'list'], stderr=subprocess.DEVNULL).decode().strip().split('\n')[1:]
         for line in snap_output:
@@ -146,32 +146,39 @@ def get_all_installed_software():
             if len(parts) >= 4:
                 name = parts[0]
                 version = parts[1]
-                install_date = parts[-1]
+                install_date = parts[-1]  # Última coluna costuma ser data
                 software_list.append({
                     "Name": name,
+                    "Version": version,
                     "Identifier": name,
                     "InstallDate": install_date
                 })
     except Exception as e:
         pass
-    '''
+
     # --------------------- FLATPAK ---------------------
-    '''
     try:
-        flatpak_output = subprocess.check_output(['flatpak', 'list', '--columns=application,installed'], stderr=subprocess.DEVNULL).decode().strip().split('\n')
+        flatpak_output = subprocess.check_output(
+            ['flatpak', 'list', '--columns=application,version,installation'],
+            stderr=subprocess.DEVNULL
+        ).decode().strip().split('\n')
+
         for line in flatpak_output:
             if '\t' in line:
-                app_id, installed = line.split('\t')
-                software_list.append({
-                    "Name": app_id,
-                    "Identifier": app_id,
-                    "InstallDate": installed if installed else "Unknown"
-                })
+                parts = line.split('\t')
+                if len(parts) >= 2:
+                    app_id = parts[0]
+                    version = parts[1] or "Unknown"
+                    software_list.append({
+                        "Name": app_id,
+                        "Version": version,
+                        "Identifier": app_id,
+                        "InstallDate": "Unknown"
+                    })
     except Exception as e:
         pass
-    '''
-    return software_list
 
+    return software_list
 
 def get_pending_updates():
     try:
