@@ -14,7 +14,7 @@ from datetime import datetime
 # =================== CONFIG ===================
 CONFIG_FILE = '/opt/iwebit_agent/iwebit_agent.conf'
 # UNIQUEID_FILE = '/opt/iwebit_agent/uniqueid.conf'
-VERSION = '1.0.5.1'
+VERSION = '1.0.6.1'
 LOG_ENABLED = True
 LOG_FILE = '/var/log/iwebit_agent/iwebit_agent.log'
 UPDATE_URL = 'https://raw.githubusercontent.com/RDFonseca82/iWebITAgent_Linux/main/iwebit_agent.py'
@@ -149,14 +149,16 @@ def send_data(fullsync):
     idsync = config.get('IdSync', '0')
     hostname = get_hostname()
     uniqueid = config.get('UniqueId', '0')
-     log(f"UniqueId read: '{uniqueid}'")  # <-- linha para debug
+    # log(f"UniqueId read: '{uniqueid}'")  # <-- linha para debug
     latitude, longitude = get_location()
+    current_datetime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
     data = {
         'IdSync': idsync,
         'uniqueid': uniqueid,
         'Hostname': hostname,
         'AgentVersion': VERSION,
+        'DateTime': current_datetime,
         'FullSync': 1 if fullsync else 0,
         'CPUUsage': get_cpu_usage(),
         'MemoryUsage': get_memory_usage(),
@@ -171,6 +173,7 @@ def send_data(fullsync):
             'Uptime': get_uptime(),
             'LastBoot': get_last_boot(),
             'TimeZone': get_timezone(),
+            'DateTime': current_datetime,
             'Hostname': hostname,
             'KernelVersion': get_kernel_version(),
             'CPUArchitecture': get_architecture(),
