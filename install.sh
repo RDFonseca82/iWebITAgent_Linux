@@ -32,10 +32,10 @@ HOSTNAME=$(hostname)
 UNIQUE_ID=$(echo -n "${IDSYNC}_${HOSTNAME}" | sha256sum | awk '{print $1}')
 
 # Atualizar ou adicionar UniqueId ao ficheiro de configuração
-if grep -q "^UniqueId =" "$INSTALL_DIR/uniqueid.conf"; then
-  sed -i "s/^UniqueId = .*/UniqueId = $UNIQUE_ID/" "$INSTALL_DIR/uniqueid.conf"
+if grep -q "^UniqueId =" "$INSTALL_DIR/iwebit_agent.conf"; then
+  sed -i "s/^UniqueId = .*/UniqueId = $UNIQUE_ID/" "$INSTALL_DIR/iwebit_agent.conf"
 else
-  echo "UniqueId = $UNIQUE_ID" >> "$INSTALL_DIR/uniqueid.conf"
+  echo "UniqueId = $UNIQUE_ID" >> "$INSTALL_DIR/iwebit_agent.conf"
 fi
 
 # Criar ficheiro do serviço
