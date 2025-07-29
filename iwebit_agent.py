@@ -15,7 +15,7 @@ from datetime import datetime
 # =================== CONFIG ===================
 CONFIG_FILE = '/opt/iwebit_agent/iwebit_agent.conf'
 # UNIQUEID_FILE = '/opt/iwebit_agent/uniqueid.conf'
-VERSION = '1.0.15.1'
+VERSION = '1.0.16.1'
 LOG_ENABLED = True
 LOG_FILE = '/var/log/iwebit_agent/iwebit_agent.log'
 UPDATE_URL = 'https://raw.githubusercontent.com/RDFonseca82/iWebITAgent_Linux/main/iwebit_agent.py'
@@ -48,6 +48,53 @@ def load_config():
 # =================== DATA COLLECTION ===================
 def get_cpu_usage():
     return psutil.cpu_percent(interval=1)
+
+def get_cpu_info():
+    info = {}
+
+    try:
+        # Arquitetura e bits
+        info['Architecture'] = platform.machine()
+        info['CPU_Bits'] = platform.architecture()[0]
+
+        # Núcleos
+        info['Physical_Cores'] = psutil.cpu_count(logical=False)
+        info['Logical_Cores'] = psutil.cpu_count(logical=True)
+
+        # Frequência
+        freq = psutil.cpu_freq()
+        if freq:
+            info['CPU_Freq_Min_MHz'] = round(freq.min, 2)
+            info['CPU_Freq_Max_MHz'] = round(freq.max, 2)
+            info['CPU_Freq_Current_MHz'] = round(freq.current, 2)
+
+        # Informações do /proc/cpuinfo
+        with open('/proc/cpuinfo') as f:
+            cpuinfo = f.read()
+
+        # Primeiro processador listado
+        first_proc = cpuinfo.split('\n\n')[0]
+
+        # Modelo e fabricante
+        model_match = re.search(r'model name\s+:\s+(.+)', first_proc)
+        vendor_match = re.search(r'vendor_id\s+:\s+(.+)', first_proc)
+        info['CPU_Model'] = model_match.group(1) if model_match else 'Unknown'
+        info['CPU_Vendor'] = vendor_match.group(1) if vendor_match else 'Unknown'
+
+        # Cache L2 ou L3 (opcional)
+        cache_match = re.search(r'cache size\s+:\s+(.+)', first_proc)
+        if cache_match:
+            info['Cache'] = cache_match.group(1)
+
+        # Flags (instruções suportadas)
+        flags_match = re.search(r'flags\s+:\s+(.+)', first_proc)
+        if flags_match:
+            info['CPU_Flags'] = flags_match.group(1).split()
+
+    except Exception as e:
+        info['Error'] = str(e)
+
+    return info
 
 def get_memory_usage():
     return psutil.virtual_memory().percent
@@ -319,7 +366,8 @@ def send_data(fullsync):
             'BiosUpgrade': get_bios_last_upgrade_date(),
             'OS_Info': get_os_info(),
             'Bios_Info': get_bios_info(),
-            'MB_Info': get_motherboard_info()           
+            'MB_Info': get_motherboard_info(),
+            'CPU_Info': get_cpu_info()
         })
 
     # Salvar JSON se Debug=1
