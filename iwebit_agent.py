@@ -15,7 +15,7 @@ from datetime import datetime
 # =================== CONFIG ===================
 CONFIG_FILE = '/opt/iwebit_agent/iwebit_agent.conf'
 # UNIQUEID_FILE = '/opt/iwebit_agent/uniqueid.conf'
-VERSION = '1.0.17.1'
+VERSION = '1.0.18.1'
 LOG_ENABLED = True
 LOG_FILE = '/var/log/iwebit_agent/iwebit_agent.log'
 UPDATE_URL = 'https://raw.githubusercontent.com/RDFonseca82/iWebITAgent_Linux/main/iwebit_agent.py'
@@ -284,11 +284,60 @@ def get_bios_last_upgrade_date():
 
 
 def get_pending_updates():
+    updates = []
+
     try:
-        output = subprocess.check_output(['apt', 'list', '--upgradeable'], stderr=subprocess.DEVNULL).decode()
-        return [line.split('/')[0] for line in output.splitlines() if '/' in line]
-    except:
-        return []
+        output = subprocess.check_output(
+            ['apt', 'list', '--upgradeable'],
+            stderr=subprocess.DEVNULL
+        ).decode().splitlines()
+
+        for line in output:
+            if not line or '/' not in line or line.startswith("Listing..."):
+                continue
+
+            # Exemplo de linha:
+            # bash/jammy 5.1-6ubuntu1.1 amd64 [upgradable from: 5.1-6ubuntu1]
+            parts = line.split()
+            if len(parts) < 4:
+                continue
+
+            name = parts[0].split('/')[0]
+            new_version = parts[1]
+            architecture = parts[2]
+            installed_version = None
+            origin = None
+
+            match = re.search(r'\[upgradable from: (.+)\]', line)
+            if match:
+                installed_version = match.group(1)
+
+            # Pegar origem do repositório e data (limitado)
+            try:
+                apt_show = subprocess.check_output(['apt-cache', 'show', name], stderr=subprocess.DEVNULL).decode()
+                origin_match = re.search(r'^Origin:\s*(.+)', apt_show, re.MULTILINE)
+                date_match = re.search(r'^Date:\s*(.+)', apt_show, re.MULTILINE)
+
+                origin = origin_match.group(1) if origin_match else None
+                release_date = date_match.group(1) if date_match else None
+            except:
+                origin = None
+                release_date = None
+
+            updates.append({
+                "Name": name,
+                "InstalledVersion": installed_version or "Unknown",
+                "NewVersion": new_version,
+                "Architecture": architecture,
+                "Origin": origin or "Unknown",
+                "ReleaseDate": release_date or "Unknown"
+            })
+
+    except Exception as e:
+        updates.append({"Error": str(e)})
+
+    return updates
+    
 
 def check_for_updates():
     try:
