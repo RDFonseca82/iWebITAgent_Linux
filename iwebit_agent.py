@@ -14,9 +14,9 @@ from datetime import datetime
 # =================== CONFIG ===================
 CONFIG_FILE = '/opt/iwebit_agent/config.conf'
 UNIQUEID_FILE = '/opt/iwebit_agent/uniqueid.conf'
-VERSION = '1.0.2.1'
+VERSION = '1.0.3.1'
 LOG_ENABLED = False
-LOG_FILE = '/opt/iwebit_agent/agent.log'
+LOG_FILE = '/var/iwebit_agent/iwebit_agent.log'
 UPDATE_URL = 'https://raw.githubusercontent.com/RDFonseca82/iWebITAgent_Linux/main/iwebit_agent.py'
 SCRIPT_PATH = '/opt/iwebit_agent/iwebit_agent.py'
 API_URL = 'https://agent.iwebit.app/scripts/script_linux.php'
