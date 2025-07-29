@@ -13,7 +13,7 @@ from datetime import datetime
 
 # =================== CONFIG ===================
 CONFIG_FILE = '/opt/iwebit_agent/iwebit_agent.conf'
-UNIQUEID_FILE = '/opt/iwebit_agent/uniqueid.conf'
+# UNIQUEID_FILE = '/opt/iwebit_agent/uniqueid.conf'
 VERSION = '1.0.3.1'
 LOG_ENABLED = True
 LOG_FILE = '/var/log/iwebit_agent/iwebit_agent.log'
@@ -39,21 +39,6 @@ def load_config():
                     config[key.strip()] = value.strip()
     LOG_ENABLED = config.get('Log', '0') == '1'
     return config
-
-# =================== UNIQUE ID ===================
-def generate_uniqueid(idsync, hostname):
-    raw_string = f"{idsync}{hostname}"
-    return hashlib.sha256(raw_string.encode()).hexdigest()
-
-def get_or_create_uniqueid(idsync, hostname):
-    if os.path.exists(UNIQUEID_FILE):
-        with open(UNIQUEID_FILE, 'r') as f:
-            return f.read().strip()
-    else:
-        uniqueid = generate_uniqueid(idsync, hostname)
-        with open(UNIQUEID_FILE, 'w') as f:
-            f.write(uniqueid)
-        return uniqueid
 
 # =================== DATA COLLECTION ===================
 def get_cpu_usage():
