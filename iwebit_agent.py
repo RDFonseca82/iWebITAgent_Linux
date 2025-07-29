@@ -158,7 +158,7 @@ def send_data(fullsync):
     config = load_config()
     idsync = config.get('IdSync', '0')
     hostname = get_hostname()
-    uniqueid = get_or_create_uniqueid(idsync, hostname)
+    uniqueid = config.get('UniqueId', '0')
     latitude, longitude = get_location()
 
     data = {
