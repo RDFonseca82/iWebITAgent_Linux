@@ -16,7 +16,7 @@ from datetime import datetime
 # =================== CONFIG ===================
 CONFIG_FILE = '/opt/iwebit_agent/iwebit_agent.conf'
 # UNIQUEID_FILE = '/opt/iwebit_agent/uniqueid.conf'
-VERSION = '1.0.20.1'
+VERSION = '1.0.21.1'
 LOG_ENABLED = True
 LOG_FILE = '/var/log/iwebit_agent/iwebit_agent.log'
 UPDATE_URL = 'https://raw.githubusercontent.com/RDFonseca82/iWebITAgent_Linux/main/iwebit_agent.py'
@@ -405,6 +405,16 @@ def check_and_run_remote_scripts():
         log(f"Enviando saída do script para API.")
         requests.get(return_url, timeout=10)
 
+        # Remove o script após execução (com verificação de segurança)
+        if script_path.startswith(scripts_dir):
+            try:
+                os.remove(script_path)
+                log(f"Script removido após execução: {script_path}")
+            except Exception as e:
+                log(f"Erro ao remover script {script_path}: {e}")
+        else:
+            log(f"Caminho do script inválido, não removido: {script_path}")
+            
     except Exception as e:
         log(f"Erro ao processar script remoto: {e}")
 
