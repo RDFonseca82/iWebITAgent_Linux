@@ -8,18 +8,22 @@ import subprocess
 import uuid
 import requests
 import platform
-from datetime import datetime
-from urllib.request import urlopen
+import datetime
+import shutil
+import hashlib
+import sys
 
 CONFIG_FILE = "/etc/iwebit_agent.conf"
 LOG_FILE = "/var/log/iwebit_agent.log"
 VERSION = "1.0.1.1"
 SYNC_INTERVAL_FULL = 3600  # 60 minutos
 SYNC_INTERVAL_MIN = 300    # 5 minutos
+GITHUB_RAW_URL = "https://raw.githubusercontent.com/RDFonseca82/iWebITAgent_Linux/main/iwebit_agent.py"
+LOCAL_SCRIPT_PATH = "/opt/iwebit_agent/iwebit_agent.py"
 
 def log(message):
     if CONFIG.get("Log", "0") == "1":
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         with open(LOG_FILE, "a") as logf:
             logf.write(f"[{timestamp}] {message}\n")
 
@@ -77,7 +81,7 @@ def get_process_list():
         lines = output.strip().splitlines()
         headers = lines[0].split()
         processes = []
-        for line in lines[1:11]:  # Top 10
+        for line in lines[1:11]:
             values = line.split(None, len(headers)-1)
             proc = dict(zip(headers, values))
             processes.append(proc)
@@ -130,7 +134,7 @@ def get_current_user():
 
 def get_public_ip():
     try:
-        return urlopen('https://api.ipify.org').read().decode('utf8')
+        return requests.get('https://api.ipify.org', timeout=5).text
     except:
         return None
 
@@ -158,6 +162,16 @@ def get_location():
     except:
         pass
     return None, None
+
+def detect_device_type():
+    try:
+        output = subprocess.check_output("hostnamectl", shell=True).decode().lower()
+        if "server" in output:
+            return 109
+        else:
+            return 92
+    except:
+        return 92
 
 def build_payload(full=True):
     lat, lon = get_location()
@@ -193,28 +207,52 @@ def build_payload(full=True):
 
     return payload
 
-def detect_device_type():
-    try:
-        output = subprocess.check_output("hostnamectl", shell=True).decode().lower()
-        if "server" in output:
-            return 109
-        else:
-            return 92
-    except:
-        return 92
-
 def send_data(payload):
     try:
-        response = requests.post("https://agent.iwebit.app/scripts/script_linux.php", 
+        response = requests.post("https://agent.iwebit.app/scripts/script_linux.php",
                                  headers={"Content-Type": "application/json"},
                                  data=json.dumps(payload), timeout=10)
         log(f"Enviado com sucesso (FullSync={payload['FullSync']}): {response.status_code}")
     except Exception as e:
         log(f"Erro ao enviar dados: {str(e)}")
 
+def file_hash(filepath):
+    h = hashlib.sha256()
+    with open(filepath, 'rb') as f:
+        h.update(f.read())
+    return h.hexdigest()
+
+def check_for_update():
+    if CONFIG.get("AutoUpdate", "0") != "1":
+        return
+
+    try:
+        response = requests.get(GITHUB_RAW_URL, timeout=10)
+        if response.status_code == 200:
+            tmp_file = "/tmp/iwebit_agent_new.py"
+            with open(tmp_file, "w") as f:
+                f.write(response.text)
+
+            if os.path.exists(LOCAL_SCRIPT_PATH):
+                current_hash = file_hash(LOCAL_SCRIPT_PATH)
+                new_hash = file_hash(tmp_file)
+
+                if current_hash != new_hash:
+                    log("Nova versão encontrada. Atualizando...")
+                    shutil.copy2(tmp_file, LOCAL_SCRIPT_PATH)
+                    os.chmod(LOCAL_SCRIPT_PATH, 0o755)
+                    os.execv(sys.executable, ["python3", LOCAL_SCRIPT_PATH])
+                else:
+                    os.remove(tmp_file)
+        else:
+            log(f"Falha ao verificar atualização. Status: {response.status_code}")
+    except Exception as e:
+        log(f"Erro durante a verificação de update: {str(e)}")
+
 def main_loop():
     last_full = 0
     while True:
+        check_for_update()
         now = time.time()
         fullsync = (now - last_full >= SYNC_INTERVAL_FULL)
         payload = build_payload(full=fullsync)
