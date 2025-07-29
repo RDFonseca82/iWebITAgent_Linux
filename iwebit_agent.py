@@ -14,7 +14,7 @@ from datetime import datetime
 # =================== CONFIG ===================
 CONFIG_FILE = '/opt/iwebit_agent/iwebit_agent.conf'
 # UNIQUEID_FILE = '/opt/iwebit_agent/uniqueid.conf'
-VERSION = '1.0.9.1'
+VERSION = '1.0.10.1'
 LOG_ENABLED = True
 LOG_FILE = '/var/log/iwebit_agent/iwebit_agent.log'
 UPDATE_URL = 'https://raw.githubusercontent.com/RDFonseca82/iWebITAgent_Linux/main/iwebit_agent.py'
@@ -257,11 +257,45 @@ def send_data(fullsync):
     except Exception as e:
         log(f"Failed to send data: {e}")
 
+# =================== CHECK REMOTE ACTIONS ===================
+def check_remote_actions():
+    config = load_config()
+    uniqueid = config.get('UniqueId', '0')
+    if uniqueid == '0' or not uniqueid:
+        log("UniqueId não definido, pulando verificação de ações remotas.")
+        return
+
+    try:
+        url = f"https://agent.iwebit.app/scripts/script_api.php?UniqueID={uniqueid}"
+        response = requests.get(url, timeout=10)
+        if response.status_code != 200:
+            log(f"Falha ao obter ações remotas. Código HTTP: {response.status_code}")
+            return
+
+        data = response.json()
+        reboot = str(data.get('OperatingSystem_Reboot', '0')) == '1'
+        shutdown = str(data.get('OperatingSystem_ShutDown', '0')) == '1'
+
+        if reboot:
+            log("Comando remoto recebido: REBOOT")
+            os.system('reboot')
+        elif shutdown:
+            log("Comando remoto recebido: SHUTDOWN")
+            os.system('shutdown now')
+        else:
+            log("Nenhuma ação remota necessária.")
+
+    except Exception as e:
+        log(f"Erro ao verificar ações remotas: {e}")
+
+
 # =================== MAIN LOOP ===================
 if __name__ == '__main__':
     full_interval = 60 * 60
     minimal_interval = 5 * 60
     last_fullsync = 0
+    last_remote_check = 0
+    remote_check_interval = 2 * 60  # 2 minutos
 
     while True:
         now = time.time()
@@ -272,6 +306,10 @@ if __name__ == '__main__':
         else:
             log("Performing MINIMAL sync")
             send_data(fullsync=False)
+
+        if now - last_remote_check >= remote_check_interval:
+            check_remote_actions()
+            last_remote_check = now
 
         check_for_updates()
         time.sleep(minimal_interval)
