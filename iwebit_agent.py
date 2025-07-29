@@ -6,7 +6,8 @@ from datetime import datetime
 CONFIG_PATH = '/etc/iwebit_agent.conf'
 LOG_PATH = '/var/log/iwebit_agent.log'
 VERSION = '1.0.0.0'
-API_URL = 'https://agent.iwebit.app/scripts/script_linux.php'
+API_URL = 'https://agent.iwebit.app/scripts/script_Linux.php'
+GITHUB_RAW_URL = 'https://raw.githubusercontent.com/RDFonseca82/iWebITAgent_Linux/main/iwebit_agent.py'
 
 def load_config():
     config = {}
@@ -74,6 +75,33 @@ def generate_unique_id(idsync, hostname):
     raw = f"{idsync}{hostname}"
     return hashlib.sha256(raw.encode()).hexdigest()
 
+def get_remote_version():
+    try:
+        response = requests.get(GITHUB_RAW_URL)
+        if response.status_code == 200:
+            for line in response.text.splitlines():
+                if line.startswith("VERSION ="):
+                    return line.split('=')[1].strip().replace("'", "")
+    except:
+        return None
+    return None
+
+def check_for_updates(current_version, log_enabled):
+    remote_version = get_remote_version()
+    if remote_version and remote_version != current_version:
+        write_log(f"Nova versão disponível: {remote_version}. Atualizando...", log_enabled)
+        try:
+            response = requests.get(GITHUB_RAW_URL)
+            if response.status_code == 200:
+                with open("/opt/iwebit_agent/iwebit_agent.py", "w") as f:
+                    f.write(response.text)
+                os.chmod("/opt/iwebit_agent/iwebit_agent.py", 0o755)
+                subprocess.run(["systemctl", "restart", "iwebit_agent.service"])
+                return True
+        except Exception as e:
+            write_log(f"Erro ao atualizar: {e}", log_enabled)
+    return False
+
 def build_payload(config, fullsync=False):
     hostname = socket.gethostname()
     mac = get_mac()
@@ -110,6 +138,7 @@ def main():
     write_log("Agente iniciado", log_enabled)
 
     while True:
+        check_for_updates(VERSION, log_enabled)
         current_time = int(time.time())
         fullsync = (current_time % 3600) < 5
         payload = build_payload(config, fullsync)
