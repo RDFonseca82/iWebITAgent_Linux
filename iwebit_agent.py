@@ -155,6 +155,8 @@ def send_data(fullsync):
     data = {
         'IdSync': idsync,
         'uniqueid': uniqueid,
+        'Hostname': hostname,
+        'AgentVersion': VERSION,
         'FullSync': 1 if fullsync else 0,
         'CPUUsage': get_cpu_usage(),
         'MemoryUsage': get_memory_usage(),
