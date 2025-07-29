@@ -5,8 +5,8 @@ from datetime import datetime
 
 CONFIG_PATH = '/etc/iwebit_agent.conf'
 LOG_PATH = '/var/log/iwebit_agent.log'
-VERSION = '1.0.0.0'
-API_URL = 'https://agent.iwebit.app/scripts/script_Linux.php'
+VERSION = '1.0.0.1'
+API_URL = 'https://agent.iwebit.app/scripts/script_linux.php'
 GITHUB_RAW_URL = 'https://raw.githubusercontent.com/RDFonseca82/iWebITAgent_Linux/main/iwebit_agent.py'
 
 def load_config():
