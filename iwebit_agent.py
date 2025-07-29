@@ -9,13 +9,14 @@ import subprocess
 import hashlib
 import requests
 import shutil
+import urllib.parse
 import re
 from datetime import datetime
 
 # =================== CONFIG ===================
 CONFIG_FILE = '/opt/iwebit_agent/iwebit_agent.conf'
 # UNIQUEID_FILE = '/opt/iwebit_agent/uniqueid.conf'
-VERSION = '1.0.19.1'
+VERSION = '1.0.20.1'
 LOG_ENABLED = True
 LOG_FILE = '/var/log/iwebit_agent/iwebit_agent.log'
 UPDATE_URL = 'https://raw.githubusercontent.com/RDFonseca82/iWebITAgent_Linux/main/iwebit_agent.py'
@@ -362,6 +363,53 @@ def is_connected():
         return False
 
 
+def check_and_run_remote_scripts():
+    config = load_config()
+    uniqueid = config.get('UniqueId', '0')
+    script_dir = '/opt/iwebit_agent/scripts'
+    os.makedirs(script_dir, exist_ok=True)
+
+    try:
+        # Passo 1: Verifica se há script para executar
+        check_url = f'https://agent.iwebit.app/scripts/script_api.php?UniqueID={uniqueid}&ScriptRun=1'
+        response = requests.get(check_url, timeout=10)
+        data = response.json()
+
+        if 'URL' not in data or not data['URL']:
+            log("Nenhum script remoto para executar.")
+            return
+
+        script_url = data['URL']
+        script_name = os.path.basename(urllib.parse.urlparse(script_url).path)
+        script_path = os.path.join(script_dir, script_name)
+
+        # Passo 2: Baixar script
+        log(f"Baixando script de: {script_url}")
+        script_resp = requests.get(script_url, timeout=10)
+        with open(script_path, 'w') as f:
+            f.write(script_resp.text)
+        os.chmod(script_path, 0o755)
+
+        # Passo 3: Executar script
+        log(f"Executando script: {script_path}")
+        result = subprocess.run([script_path], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=60)
+        output = result.stdout.decode(errors='ignore').strip()
+
+        # Limitar tamanho da resposta, se necessário
+        if len(output) > 3000:
+            output = output[:3000] + '... [truncado]'
+
+        # Passo 4: Enviar resposta
+        encoded_output = urllib.parse.quote_plus(output)
+        return_url = f'https://agent.iwebit.app/scripts/script_api.php?UniqueID={uniqueid}&ScriptRunned=1&Output={encoded_output}'
+        log(f"Enviando saída do script para API.")
+        requests.get(return_url, timeout=10)
+
+    except Exception as e:
+        log(f"Erro ao processar script remoto: {e}")
+
+
+
 # =================== SYNC ===================
 def send_data(fullsync):
     config = load_config()
@@ -497,6 +545,7 @@ if __name__ == '__main__':
 
         if now - last_remote_check >= remote_check_interval:
             check_remote_actions()
+            check_and_run_remote_scripts()
             last_remote_check = now
 
         check_for_updates()
