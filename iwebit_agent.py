@@ -1,266 +1,214 @@
 #!/usr/bin/env python3
-
 import os
-import time
-import json
-import socket
-import subprocess
-import uuid
-import requests
 import platform
-import datetime
-import shutil
+import psutil
+import socket
+import json
+import time
+import subprocess
 import hashlib
-import sys
+import requests
+import shutil
+from datetime import datetime
 
-CONFIG_FILE = "/etc/iwebit_agent.conf"
-LOG_FILE = "/var/log/iwebit_agent.log"
-VERSION = "1.0.1.1"
-SYNC_INTERVAL_FULL = 3600  # 60 minutos
-SYNC_INTERVAL_MIN = 300    # 5 minutos
-GITHUB_RAW_URL = "https://raw.githubusercontent.com/RDFonseca82/iWebITAgent_Linux/main/iwebit_agent.py"
-LOCAL_SCRIPT_PATH = "/opt/iwebit_agent/iwebit_agent.py"
+# =================== CONFIG ===================
+CONFIG_FILE = '/opt/iwebit_agent/config.conf'
+UNIQUEID_FILE = '/opt/iwebit_agent/uniqueid.conf'
+VERSION = '1.0.2.1'
+LOG_ENABLED = False
+LOG_FILE = '/opt/iwebit_agent/agent.log'
+UPDATE_URL = 'https://raw.githubusercontent.com/RDFonseca82/iWebITAgent_Linux/main/iwebit_agent.py'
+SCRIPT_PATH = '/opt/iwebit_agent/iwebit_agent.py'
+API_URL = 'https://agent.iwebit.app/scripts/script_linux.php'
 
+# =================== LOGGING ===================
 def log(message):
-    if CONFIG.get("Log", "0") == "1":
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        with open(LOG_FILE, "a") as logf:
-            logf.write(f"[{timestamp}] {message}\n")
+    if LOG_ENABLED:
+        with open(LOG_FILE, 'a') as f:
+            f.write(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {message}\n")
 
-def get_config():
+# =================== CONFIG LOAD ===================
+def load_config():
+    global LOG_ENABLED
     config = {}
     if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, "r") as f:
+        with open(CONFIG_FILE, 'r') as f:
             for line in f:
-                if "=" in line:
-                    key, value = line.strip().split("=", 1)
-                    config[key] = value
+                if '=' in line:
+                    key, value = line.strip().split('=', 1)
+                    config[key.strip()] = value.strip()
+    LOG_ENABLED = config.get('Log', '0') == '1'
     return config
 
-def get_unique_id():
-    idsync = CONFIG.get("IdSync", "")
-    hostname = socket.gethostname()
-    raw = f"{idsync}_{hostname}"
-    return uuid.uuid5(uuid.NAMESPACE_DNS, raw).hex
+# =================== UNIQUE ID ===================
+def generate_uniqueid(idsync, hostname):
+    raw_string = f"{idsync}{hostname}"
+    return hashlib.sha256(raw_string.encode()).hexdigest()
 
+def get_or_create_uniqueid(idsync, hostname):
+    if os.path.exists(UNIQUEID_FILE):
+        with open(UNIQUEID_FILE, 'r') as f:
+            return f.read().strip()
+    else:
+        uniqueid = generate_uniqueid(idsync, hostname)
+        with open(UNIQUEID_FILE, 'w') as f:
+            f.write(uniqueid)
+        return uniqueid
+
+# =================== DATA COLLECTION ===================
 def get_cpu_usage():
-    return os.getloadavg()[0]
+    return psutil.cpu_percent(interval=1)
 
 def get_memory_usage():
-    try:
-        with open('/proc/meminfo', 'r') as f:
-            meminfo = f.read()
-        total = int([x for x in meminfo.splitlines() if 'MemTotal' in x][0].split()[1])
-        free = int([x for x in meminfo.splitlines() if 'MemAvailable' in x][0].split()[1])
-        usage = ((total - free) / total) * 100
-        return round(usage, 2)
-    except:
-        return None
+    return psutil.virtual_memory().percent
 
-def get_total_ram():
-    try:
-        with open('/proc/meminfo', 'r') as f:
-            meminfo = f.read()
-        total_kb = int([x for x in meminfo.splitlines() if 'MemTotal' in x][0].split()[1])
-        return round(total_kb / 1024, 2)
-    except:
-        return None
+def get_total_memory():
+    return round(psutil.virtual_memory().total / (1024**3), 2)
 
 def get_mac_address():
-    try:
-        output = subprocess.check_output("ip link", shell=True).decode()
-        for line in output.splitlines():
-            if "link/ether" in line:
-                return line.strip().split()[1]
-    except:
-        return None
+    for interface, addrs in psutil.net_if_addrs().items():
+        for addr in addrs:
+            if addr.family == psutil.AF_LINK:
+                return addr.address
+    return '00:00:00:00:00:00'
 
 def get_process_list():
-    try:
-        output = subprocess.check_output(["ps", "-eo", "pid,comm,%cpu,%mem", "--sort=-%cpu"], text=True)
-        lines = output.strip().splitlines()
-        headers = lines[0].split()
-        processes = []
-        for line in lines[1:11]:
-            values = line.split(None, len(headers)-1)
-            proc = dict(zip(headers, values))
-            processes.append(proc)
-        return processes
-    except:
-        return []
-
-def get_uptime():
-    try:
-        with open('/proc/uptime', 'r') as f:
-            seconds = float(f.readline().split()[0])
-            return str(datetime.timedelta(seconds=int(seconds)))
-    except:
-        return None
-
-def get_last_boot():
-    try:
-        output = subprocess.check_output("who -b", shell=True).decode()
-        return output.strip().split("boot")[1].strip()
-    except:
-        return None
-
-def get_timezone():
-    try:
-        return time.tzname[0]
-    except:
-        return None
+    return [p.info for p in psutil.process_iter(attrs=['pid', 'name', 'username'])]
 
 def get_hostname():
     return socket.gethostname()
 
+def get_uptime():
+    return int(time.time() - psutil.boot_time())
+
+def get_last_boot():
+    return datetime.fromtimestamp(psutil.boot_time()).strftime('%Y-%m-%d %H:%M:%S')
+
+def get_timezone():
+    return time.tzname[0]
+
 def get_kernel_version():
     return platform.release()
 
-def get_cpu_architecture():
+def get_architecture():
     return platform.machine()
 
-def get_logged_users_count():
-    try:
-        output = subprocess.check_output("who", shell=True).decode()
-        return len(output.strip().splitlines())
-    except:
-        return None
+def get_logged_users():
+    return len(psutil.users())
 
 def get_current_user():
-    try:
-        return os.getlogin()
-    except:
-        return None
+    return os.getlogin()
 
 def get_public_ip():
     try:
-        return requests.get('https://api.ipify.org', timeout=5).text
+        return requests.get('https://api.ipify.org').text
     except:
-        return None
+        return 'Unavailable'
+
+def get_location():
+    try:
+        res = requests.get('https://ipinfo.io/json').json()
+        loc = res.get('loc', '0,0').split(',')
+        return loc[0], loc[1]
+    except:
+        return '0', '0'
+
+def get_device_type():
+    try:
+        output = subprocess.check_output(['systemd-detect-virt']).decode().strip()
+        return 109 if output == 'none' else 92
+    except:
+        return 92
 
 def get_installed_packages():
     try:
-        output = subprocess.check_output("dpkg -l", shell=True).decode()
-        return output.strip().splitlines()[5:]
+        output = subprocess.check_output(['dpkg-query', '-W', '-f=${Package}\n']).decode()
+        return output.strip().split('\n')
     except:
         return []
 
 def get_pending_updates():
     try:
-        output = subprocess.check_output("apt list --upgradable 2>/dev/null | tail -n +2", shell=True).decode()
-        return output.strip().splitlines()
+        output = subprocess.check_output(['apt', 'list', '--upgradeable'], stderr=subprocess.DEVNULL).decode()
+        return [line.split('/')[0] for line in output.splitlines() if '/' in line]
     except:
         return []
 
-def get_location():
+def check_for_updates():
     try:
-        response = requests.get("https://ipinfo.io/json", timeout=5)
-        data = response.json()
-        if "loc" in data:
-            lat, lon = data["loc"].split(",")
-            return lat, lon
-    except:
-        pass
-    return None, None
+        remote = requests.get(UPDATE_URL).text
+        with open(SCRIPT_PATH, 'r') as f:
+            local = f.read()
+        if remote.strip() != local.strip():
+            log("Update available. Updating...")
+            with open(SCRIPT_PATH, 'w') as f:
+                f.write(remote)
+            os.chmod(SCRIPT_PATH, 0o755)
+            log("Update applied. Restarting agent...")
+            os.execv(SCRIPT_PATH, ['python3', SCRIPT_PATH])
+    except Exception as e:
+        log(f"Auto-update failed: {e}")
 
-def detect_device_type():
-    try:
-        output = subprocess.check_output("hostnamectl", shell=True).decode().lower()
-        if "server" in output:
-            return 109
-        else:
-            return 92
-    except:
-        return 92
+# =================== SYNC ===================
+def send_data(fullsync):
+    config = load_config()
+    idsync = config.get('IdSync', '0')
+    hostname = get_hostname()
+    uniqueid = get_or_create_uniqueid(idsync, hostname)
+    latitude, longitude = get_location()
 
-def build_payload(full=True):
-    lat, lon = get_location()
-    payload = {
-        "uniqueid": get_unique_id(),
-        "IdSync": CONFIG.get("IdSync", ""),
-        "FullSync": 1 if full else 0,
-        "CPU": get_cpu_usage(),
-        "Memory": get_memory_usage(),
-        "Latitude": lat,
-        "Longitude": lon
+    data = {
+        'IdSync': idsync,
+        'UniqueId': uniqueid,
+        'FullSync': 1 if fullsync else 0,
+        'CPUUsage': get_cpu_usage(),
+        'MemoryUsage': get_memory_usage(),
+        'Latitude': latitude,
+        'Longitude': longitude
     }
 
-    if full:
-        payload.update({
-            "MAC": get_mac_address(),
-            "ProcessList": get_process_list(),
-            "Uptime": get_uptime(),
-            "LastBoot": get_last_boot(),
-            "TimeZone": get_timezone(),
-            "Hostname": get_hostname(),
-            "KernelVersion": get_kernel_version(),
-            "CPUArchitecture": get_cpu_architecture(),
-            "NumLoggedUsers": get_logged_users_count(),
-            "CurrentUser": get_current_user(),
-            "PublicIP": get_public_ip(),
-            "TotalRAM": get_total_ram(),
-            "InstalledPackages": get_installed_packages(),
-            "PendingUpdates": get_pending_updates(),
-            "ScriptVersion": VERSION,
-            "IdDeviceType": detect_device_type()
+    if fullsync:
+        data.update({
+            'MACAddress': get_mac_address(),
+            'ProcessList': get_process_list(),
+            'Uptime': get_uptime(),
+            'LastBoot': get_last_boot(),
+            'TimeZone': get_timezone(),
+            'Hostname': hostname,
+            'KernelVersion': get_kernel_version(),
+            'CPUArchitecture': get_architecture(),
+            'NumLoggedUsers': get_logged_users(),
+            'CurrentUser': get_current_user(),
+            'PublicIP': get_public_ip(),
+            'TotalRAM': get_total_memory(),
+            'IdDeviceType': get_device_type(),
+            'AgentVersion': VERSION,
+            'InstalledPackages': get_installed_packages(),
+            'PendingUpdates': get_pending_updates()
         })
 
-    return payload
-
-def send_data(payload):
     try:
-        response = requests.post("https://agent.iwebit.app/scripts/script_linux.php",
-                                 headers={"Content-Type": "application/json"},
-                                 data=json.dumps(payload), timeout=10)
-        log(f"Enviado com sucesso (FullSync={payload['FullSync']}): {response.status_code}")
+        headers = {'Content-Type': 'application/json'}
+        response = requests.post(API_URL, json=data, headers=headers)
+        log(f"Data sent. Status code: {response.status_code}")
     except Exception as e:
-        log(f"Erro ao enviar dados: {str(e)}")
+        log(f"Failed to send data: {e}")
 
-def file_hash(filepath):
-    h = hashlib.sha256()
-    with open(filepath, 'rb') as f:
-        h.update(f.read())
-    return h.hexdigest()
+# =================== MAIN LOOP ===================
+if __name__ == '__main__':
+    full_interval = 60 * 60
+    minimal_interval = 5 * 60
+    last_fullsync = 0
 
-def check_for_update():
-    if CONFIG.get("AutoUpdate", "0") != "1":
-        return
-
-    try:
-        response = requests.get(GITHUB_RAW_URL, timeout=10)
-        if response.status_code == 200:
-            tmp_file = "/tmp/iwebit_agent_new.py"
-            with open(tmp_file, "w") as f:
-                f.write(response.text)
-
-            if os.path.exists(LOCAL_SCRIPT_PATH):
-                current_hash = file_hash(LOCAL_SCRIPT_PATH)
-                new_hash = file_hash(tmp_file)
-
-                if current_hash != new_hash:
-                    log("Nova versão encontrada. Atualizando...")
-                    shutil.copy2(tmp_file, LOCAL_SCRIPT_PATH)
-                    os.chmod(LOCAL_SCRIPT_PATH, 0o755)
-                    os.execv(sys.executable, ["python3", LOCAL_SCRIPT_PATH])
-                else:
-                    os.remove(tmp_file)
-        else:
-            log(f"Falha ao verificar atualização. Status: {response.status_code}")
-    except Exception as e:
-        log(f"Erro durante a verificação de update: {str(e)}")
-
-def main_loop():
-    last_full = 0
     while True:
-        check_for_update()
         now = time.time()
-        fullsync = (now - last_full >= SYNC_INTERVAL_FULL)
-        payload = build_payload(full=fullsync)
-        send_data(payload)
-        if fullsync:
-            last_full = now
-        time.sleep(SYNC_INTERVAL_MIN)
+        if now - last_fullsync >= full_interval:
+            log("Performing FULL sync")
+            send_data(fullsync=True)
+            last_fullsync = now
+        else:
+            log("Performing MINIMAL sync")
+            send_data(fullsync=False)
 
-if __name__ == "__main__":
-    CONFIG = get_config()
-    main_loop()
+        check_for_updates()
+        time.sleep(minimal_interval)
