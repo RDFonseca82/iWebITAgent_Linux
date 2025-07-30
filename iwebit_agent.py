@@ -16,7 +16,7 @@ from datetime import datetime
 # =================== CONFIG ===================
 CONFIG_FILE = '/opt/iwebit_agent/iwebit_agent.conf'
 # UNIQUEID_FILE = '/opt/iwebit_agent/uniqueid.conf'
-VERSION = '1.0.24.1'
+VERSION = '1.0.25.1'
 LOG_ENABLED = True
 LOG_FILE = '/var/log/iwebit_agent/iwebit_agent.log'
 UPDATE_URL = 'https://raw.githubusercontent.com/RDFonseca82/iWebITAgent_Linux/main/iwebit_agent.py'
@@ -152,10 +152,20 @@ def get_location():
 
 def get_device_type():
     try:
-        output = subprocess.check_output(['systemd-detect-virt']).decode().strip()
-        return 109 if output == 'none' else 92
+        # Verifica se está em ambiente gráfico
+        has_gui = any([
+            os.path.exists('/usr/bin/startx'),
+            os.path.exists('/usr/bin/gnome-shell'),
+            os.path.exists('/usr/bin/startplasma-x11'),
+            os.path.exists('/usr/bin/lightdm'),
+            os.path.exists('/usr/bin/gdm'),
+            os.path.exists('/usr/bin/sddm'),
+            os.environ.get('XDG_SESSION_TYPE') in ['x11', 'wayland'],
+        ])
+
+        return 92 if has_gui else 109  # 92 = Desktop, 109 = Server
     except:
-        return 92
+        return 92  # Assumir Desktop por padrão
 
 def get_all_installed_software():
     software_list = []
