@@ -284,6 +284,9 @@ def get_bios_last_upgrade_date():
     return "Unknown"
 
 
+import subprocess
+import re
+
 def get_pending_updates():
     updates = []
 
@@ -297,7 +300,7 @@ def get_pending_updates():
             if not line or '/' not in line or line.startswith("Listing..."):
                 continue
 
-            # Exemplo de linha:
+            # Exemplo:
             # bash/jammy 5.1-6ubuntu1.1 amd64 [upgradable from: 5.1-6ubuntu1]
             parts = line.split()
             if len(parts) < 4:
@@ -308,22 +311,29 @@ def get_pending_updates():
             architecture = parts[2]
             installed_version = None
             origin = None
+            release_date = None
+            description = None
 
             match = re.search(r'\[upgradable from: (.+)\]', line)
             if match:
                 installed_version = match.group(1)
 
-            # Pegar origem do repositório e data (limitado)
             try:
-                apt_show = subprocess.check_output(['apt-cache', 'show', name], stderr=subprocess.DEVNULL).decode()
+                apt_show = subprocess.check_output(
+                    ['apt-cache', 'show', name],
+                    stderr=subprocess.DEVNULL
+                ).decode()
+
                 origin_match = re.search(r'^Origin:\s*(.+)', apt_show, re.MULTILINE)
                 date_match = re.search(r'^Date:\s*(.+)', apt_show, re.MULTILINE)
+                desc_match = re.search(r'^Description(?:-en)?:\s*(.+)', apt_show, re.MULTILINE)
 
                 origin = origin_match.group(1) if origin_match else None
                 release_date = date_match.group(1) if date_match else None
+                description = desc_match.group(1) if desc_match else None
+
             except:
-                origin = None
-                release_date = None
+                pass
 
             updates.append({
                 "Name": name,
@@ -331,13 +341,15 @@ def get_pending_updates():
                 "NewVersion": new_version,
                 "Architecture": architecture,
                 "Origin": origin or "NULL",
-                "ReleaseDate": release_date or "NULL"
+                "ReleaseDate": release_date or "NULL",
+                "Description": description or "NULL"
             })
 
     except Exception as e:
         updates.append({"Error": str(e)})
 
     return updates
+
     
 
 def check_for_updates():
