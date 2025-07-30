@@ -16,7 +16,7 @@ from datetime import datetime
 # =================== CONFIG ===================
 CONFIG_FILE = '/opt/iwebit_agent/iwebit_agent.conf'
 # UNIQUEID_FILE = '/opt/iwebit_agent/uniqueid.conf'
-VERSION = '1.0.22.1'
+VERSION = '1.0.23.1'
 LOG_ENABLED = True
 LOG_FILE = '/var/log/iwebit_agent/iwebit_agent.log'
 UPDATE_URL = 'https://raw.githubusercontent.com/RDFonseca82/iWebITAgent_Linux/main/iwebit_agent.py'
@@ -373,9 +373,16 @@ def check_and_run_remote_scripts():
         # Passo 1: Verifica se há script para executar
         check_url = f'https://agent.iwebit.app/scripts/script_api.php?UniqueID={uniqueid}&ScriptRun=1'
         response = requests.get(check_url, timeout=10)
-        data = response.json()
 
-        if 'URL' not in data or not data['URL']:
+        # Verifica se a resposta é válida e em JSON
+        try:
+            data = response.json()
+        except Exception:
+            log("Resposta da API não contém JSON válido. Nenhum script para executar.")
+            return
+
+        # Se não houver campo URL ou estiver vazio
+        if not isinstance(data, dict) or 'URL' not in data or not data['URL']:
             log("Nenhum script remoto para executar.")
             return
 
@@ -395,17 +402,15 @@ def check_and_run_remote_scripts():
         result = subprocess.run([script_path], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=60)
         output = result.stdout.decode(errors='ignore').strip()
 
-        # Limitar tamanho da resposta, se necessário
         if len(output) > 3000:
             output = output[:3000] + '... [truncado]'
 
         # Passo 4: Enviar resposta
-        #encoded_output = urllib.parse.quote_plus(output)
-        return_url = f'https://agent.iwebit.app/scripts/script_api.php?UniqueID={uniqueid}&ScriptRunned=1&Output={output}'
+        return_url = f'https://agent.iwebit.app/scripts/script_api.php?UniqueID={uniqueid}&ScriptRunned=1&Output={urllib.parse.quote_plus(output)}'
         log(f"Enviando saída do script para API. ({output})")
         requests.get(return_url, timeout=10)
 
-        # Remove o script após execução (com verificação de segurança)
+        # Remover script após execução
         if script_path.startswith(script_dir):
             try:
                 os.remove(script_path)
@@ -414,9 +419,10 @@ def check_and_run_remote_scripts():
                 log(f"Erro ao remover script {script_path}: {e}")
         else:
             log(f"Caminho do script inválido, não removido: {script_path}")
-            
+
     except Exception as e:
         log(f"Erro ao processar script remoto: {e}")
+
 
 
 
