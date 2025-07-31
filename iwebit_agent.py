@@ -16,7 +16,7 @@ from datetime import datetime
 # =================== CONFIG ===================
 CONFIG_FILE = '/opt/iwebit_agent/iwebit_agent.conf'
 # UNIQUEID_FILE = '/opt/iwebit_agent/uniqueid.conf'
-VERSION = '1.0.29.1'
+VERSION = '1.0.30.1'
 LOG_ENABLED = True
 LOG_FILE = '/var/log/iwebit_agent/iwebit_agent.log'
 UPDATE_URL = 'https://raw.githubusercontent.com/RDFonseca82/iWebITAgent_Linux/main/iwebit_agent.py'
@@ -592,7 +592,7 @@ def send_data(fullsync):
             'OS_Info': get_os_info(),
             'Bios_Info': get_bios_info(),
             'MB_Info': get_motherboard_info(),
-            'CPU_Info': get_cpu_info()
+            'CPU_Info': get_cpu_info(),
             'RebootPending': is_reboot_pending()
         })
 
