@@ -18,7 +18,7 @@ from datetime import datetime
 # =================== CONFIG ===================
 CONFIG_FILE = '/opt/iwebit_agent/iwebit_agent.conf'
 # UNIQUEID_FILE = '/opt/iwebit_agent/uniqueid.conf'
-VERSION = '1.0.32.1'
+VERSION = '1.0.33.1'
 LOG_ENABLED = True
 LOG_FILE = '/var/log/iwebit_agent/iwebit_agent.log'
 UPDATE_URL = 'https://raw.githubusercontent.com/RDFonseca82/iWebITAgent_Linux/main/iwebit_agent.py'
@@ -169,6 +169,69 @@ def get_device_type():
     except:
         return 92  # Assumir Desktop por padrão
 
+
+
+def get_disk_info():
+    disks = []
+    partitions = psutil.disk_partitions(all=False)
+
+    for part in partitions:
+        try:
+            usage = psutil.disk_usage(part.mountpoint)
+
+            # Verificar se está encriptado
+            try:
+                lsblk_output = subprocess.check_output(['lsblk', '-no', 'TYPE', part.device], text=True).strip()
+                encrypted = 'crypt' in lsblk_output or 'luks' in lsblk_output.lower()
+            except Exception:
+                encrypted = False
+
+            # Buscar LABEL e UUID com blkid
+            label = None
+            uuid = None
+            try:
+                blkid_output = subprocess.check_output(['blkid', part.device], text=True).strip()
+                for entry in blkid_output.split():
+                    if entry.startswith("LABEL="):
+                        label = entry.split('=')[1].strip('"')
+                    elif entry.startswith("UUID="):
+                        uuid = entry.split('=')[1].strip('"')
+            except Exception:
+                pass
+
+            # Detectar se é SSD ou HDD (via /sys/block/*/queue/rotational)
+            drive_type = "Unknown"
+            try:
+                base_device = os.path.basename(part.device).rstrip("0123456789")
+                rotational_path = f"/sys/block/{base_device}/queue/rotational"
+                if os.path.exists(rotational_path):
+                    with open(rotational_path, 'r') as f:
+                        is_rotational = f.read().strip()
+                        drive_type = "HDD" if is_rotational == "1" else "SSD"
+            except Exception:
+                pass
+
+            disks.append({
+                'Device': part.device,
+                'MountPoint': part.mountpoint,
+                'FileSystem': part.fstype,
+                'TotalSizeGB': round(usage.total / (1024 ** 3), 2),
+                'UsedGB': round(usage.used / (1024 ** 3), 2),
+                'FreeGB': round(usage.free / (1024 ** 3), 2),
+                'PercentUsed': usage.percent,
+                'Encrypted': encrypted,
+                'Label': label,
+                'UUID': uuid,
+                'DriveType': drive_type
+            })
+
+        except PermissionError:
+            continue  # Ignorar partições sem permissão
+        except Exception as e:
+            print(f"Erro ao processar {part.device}: {e}")
+            continue
+
+    return disks
 
 
 def get_network_interfaces_info():
@@ -644,6 +707,7 @@ def send_data(fullsync):
             'MB_Info': get_motherboard_info(),
             'CPU_Info': get_cpu_info(),
             'NetworkInfo': get_network_interfaces_info(),
+            'DiskInfo': get_disk_info(),
             'RebootPending': is_reboot_pending()
         })
 
