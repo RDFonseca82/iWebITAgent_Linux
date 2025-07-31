@@ -16,7 +16,7 @@ from datetime import datetime
 # =================== CONFIG ===================
 CONFIG_FILE = '/opt/iwebit_agent/iwebit_agent.conf'
 # UNIQUEID_FILE = '/opt/iwebit_agent/uniqueid.conf'
-VERSION = '1.0.28.1'
+VERSION = '1.0.29.1'
 LOG_ENABLED = True
 LOG_FILE = '/var/log/iwebit_agent/iwebit_agent.log'
 UPDATE_URL = 'https://raw.githubusercontent.com/RDFonseca82/iWebITAgent_Linux/main/iwebit_agent.py'
@@ -166,6 +166,39 @@ def get_device_type():
         return 92 if has_gui else 109  # 92 = Desktop, 109 = Server
     except:
         return 92  # Assumir Desktop por padrão
+
+import os
+
+def is_reboot_pending():
+    """
+    Verifica se o sistema Linux tem um reboot pendente.
+    Retorna True se sim, False se não.
+    """
+    reboot_files = [
+        "/var/run/reboot-required",                  # Debian/Ubuntu
+        "/run/reboot-required",                      # Alguns derivados
+        "/var/run/reboot-required.pkgs",             # Ubuntu (detalhe)
+        "/var/run/yum.pid",                          # RedHat/CentOS (durante atualização)
+        "/var/run/dnf.pid"                           # Fedora/RHEL (atualizações pendentes)
+    ]
+
+    for path in reboot_files:
+        if os.path.exists(path):
+            return True
+
+    # systemd way (algumas distros modernas)
+    try:
+        with open("/proc/1/comm") as f:
+            if f.read().strip() == "systemd":
+                result = os.system("needs-restarting -r > /dev/null 2>&1")
+                if result == 1:
+                    return True
+    except:
+        pass
+
+    return False
+
+
 
 def get_all_installed_software():
     software_list = []
@@ -532,7 +565,8 @@ def send_data(fullsync):
         'MemoryUsage': get_memory_usage(),
         'CurrentUser': get_current_user(),
         'Latitude': latitude,
-        'Longitude': longitude
+        'Longitude': longitude,
+        'RebootPending': is_reboot_pending()
     }
 
     if fullsync:
@@ -559,6 +593,7 @@ def send_data(fullsync):
             'Bios_Info': get_bios_info(),
             'MB_Info': get_motherboard_info(),
             'CPU_Info': get_cpu_info()
+            'RebootPending': is_reboot_pending()
         })
 
     # Salvar JSON se Debug=1
