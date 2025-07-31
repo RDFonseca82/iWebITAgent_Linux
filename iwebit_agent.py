@@ -18,7 +18,7 @@ from datetime import datetime
 # =================== CONFIG ===================
 CONFIG_FILE = '/opt/iwebit_agent/iwebit_agent.conf'
 # UNIQUEID_FILE = '/opt/iwebit_agent/uniqueid.conf'
-VERSION = '1.0.33.1'
+VERSION = '1.0.34.1'
 LOG_ENABLED = True
 LOG_FILE = '/var/log/iwebit_agent/iwebit_agent.log'
 UPDATE_URL = 'https://raw.githubusercontent.com/RDFonseca82/iWebITAgent_Linux/main/iwebit_agent.py'
@@ -168,6 +168,42 @@ def get_device_type():
         return 92 if has_gui else 109  # 92 = Desktop, 109 = Server
     except:
         return 92  # Assumir Desktop por padrão
+
+
+def get_physical_memory_info():
+    try:
+        output = subprocess.check_output(['dmidecode', '--type', '17'], text=True, stderr=subprocess.DEVNULL)
+    except subprocess.CalledProcessError:
+        return []
+
+    memory_blocks = output.split("Memory Device")
+    memories = []
+
+    def sanitize(value):
+        return None if not value or value.strip().lower() == "unknown" else value.strip()
+
+    for block in memory_blocks:
+        if "Size: No Module Installed" in block:
+            continue
+
+        def extract(field):
+            match = re.search(rf"{field}:\s*(.*)", block)
+            return sanitize(match.group(1)) if match else None
+
+        memory_info = {
+            "BankLocator": extract("Bank Locator"),
+            "Size": extract("Size"),
+            "Speed": extract("Speed"),
+            "ConfiguredClockSpeed": extract("Configured Clock Speed"),
+            "Manufacturer": extract("Manufacturer"),
+            "PartNumber": extract("Part Number"),
+            "SerialNumber": extract("Serial Number")
+        }
+
+        memories.append(memory_info)
+
+    return memories
+
 
 
 
@@ -708,6 +744,7 @@ def send_data(fullsync):
             'CPU_Info': get_cpu_info(),
             'NetworkInfo': get_network_interfaces_info(),
             'DiskInfo': get_disk_info(),
+            'MemoryInfo': get_physical_memory_info(),
             'RebootPending': is_reboot_pending()
         })
 
