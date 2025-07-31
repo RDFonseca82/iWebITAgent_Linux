@@ -43,6 +43,12 @@ sudo rm -rf /var/log/iwebit_agent
 
 ----------------------------------------------------------------------------------------
 
+# Update Manual
+
+sudo curl -o /opt/iwebit_agent/iwebit_agent.py https://raw.githubusercontent.com/RDFonseca82/iWebITAgent_Linux/main/iwebit_agent.py && sudo chmod +x /opt/iwebit_agent/iwebit_agent.py && sudo systemctl restart iwebit_agent
+
+----------------------------------------------------------------------------------------
+
 # Verificar versão do Agente
 
 grep "VERSION" /opt/iwebit_agent/iwebit_agent.py
