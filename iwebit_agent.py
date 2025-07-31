@@ -379,7 +379,7 @@ def check_for_updates():
 
 def is_connected():
     try:
-        subprocess.check_output(["ping", "-c", "1", "-W", "2", "8.8.8.8"], stderr=subprocess.DEVNULL)
+        subprocess.check_output(["ping", "-c", "1", "-W", "2", "iwebit.app"], stderr=subprocess.DEVNULL)
         return True
     except subprocess.CalledProcessError:
         return False
