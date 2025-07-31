@@ -176,7 +176,6 @@ def get_network_interfaces_info():
     gateways = netifaces.gateways()
 
     def get_gateway_for_interface(iface):
-        # Pega gateway default para a interface, se existir
         default_gateways = gateways.get('default', {})
         gw = default_gateways.get(netifaces.AF_INET)
         if gw and gw[1] == iface:
@@ -184,7 +183,6 @@ def get_network_interfaces_info():
         return None
 
     def dhcp_enabled(iface):
-        # Checa se dhclient está rodando para a interface (heurística)
         try:
             output = subprocess.check_output(['ps', 'aux'], text=True)
             for line in output.splitlines():
@@ -202,9 +200,9 @@ def get_network_interfaces_info():
         mac_address = None
 
         for addr in addrs:
-            if addr.family == psutil.AF_LINK:
+            if addr.family == socket.AF_PACKET:  # MAC address (Linux)
                 mac_address = addr.address
-            elif addr.family == psutil.AF_INET:
+            elif addr.family == socket.AF_INET:  # IPv4
                 ip_address = addr.address
                 subnet_mask = addr.netmask
 
@@ -221,6 +219,7 @@ def get_network_interfaces_info():
         })
 
     return result
+
 
 def is_reboot_pending():
     # Verifica se o sistema Linux tem um reboot pendente. Retorna True se sim, False se não.
