@@ -16,7 +16,7 @@ from datetime import datetime
 # =================== CONFIG ===================
 CONFIG_FILE = '/opt/iwebit_agent/iwebit_agent.conf'
 # UNIQUEID_FILE = '/opt/iwebit_agent/uniqueid.conf'
-VERSION = '1.0.26.1'
+VERSION = '1.0.27.1'
 LOG_ENABLED = True
 LOG_FILE = '/var/log/iwebit_agent/iwebit_agent.log'
 UPDATE_URL = 'https://raw.githubusercontent.com/RDFonseca82/iWebITAgent_Linux/main/iwebit_agent.py'
@@ -446,66 +446,64 @@ def check_and_run_remote_scripts():
         log(f"Erro ao processar script remoto: {e}")
 
 
-def check_and_run_updates():
-    config = load_config()
-    uniqueid = config.get('UniqueId', '0')
-    api_check_url = f"https://agent.iwebit.app/scripts/script_api.php?UniqueID={uniqueid}&LinuxUpdatesRun=1"
-    log("Verificando atualizações remotas...")
 
+
+def check_and_run_linux_updates():
+    url = f"https://agent.iwebit.app/scripts/script_api.php?UniqueID={uniqueid}&LinuxUpdatesRun=1"
     try:
-        response = requests.get(api_check_url)
-        updates = response.json()
+        response = requests.get(url, timeout=30)
+        raw_data = response.text.strip()
+        
+        # Extrai cada bloco JSON separadamente com regex
+        json_blocks = re.findall(r'\{.*?\}', raw_data)
 
-        if not isinstance(updates, list) or not updates:
-            log("Nenhuma atualização remota pendente.")
+        if not json_blocks:
+            log("Nenhuma atualização Linux remota encontrada.")
             return
 
-        for update in updates:
-            package = update.get('LinuxUpdateID')
-            version = update.get('NewVersion')
-            if not package or not version:
-                log(f"Atualização inválida recebida: {update}")
-                continue
-
-            log(f"Atualizando pacote: {package} para a versão {version}")
-
+        log(f"{len(json_blocks)} atualizações remotas encontradas.")
+        
+        for block in json_blocks:
             try:
-                # Executa comando de instalação
-                cmd = ['apt-get', 'install', f'{package}={version}', '-y']
-                result = subprocess.run(cmd, capture_output=True, text=True)
+                update = json.loads(block)
+                package = update.get("LinuxUpdateID")
+                new_version = update.get("NewVersion")
+                update_id = update.get("IdLinuxUpdateRun")
 
-                output = result.stdout + result.stderr
-                log(f"Saída:\n{output}")
+                log(f"Iniciando atualização do pacote '{package}' para versão '{new_version}'")
 
-                if "Unable to locate package" in output or "E: Version" in output:
-                    resultado = "Indisponivel"
-                elif result.returncode != 0:
-                    resultado = "Falhou"
-                else:
-                    resultado = "Sucesso"
+                # Tenta atualizar o pacote
+                try:
+                    result = subprocess.run(
+                        ["apt-get", "install", "--only-upgrade", "-y", package],
+                        capture_output=True, text=True
+                    )
+                    if result.returncode == 0:
+                        status = "Sucesso"
+                        log(f"Atualização de '{package}' concluída com sucesso.")
+                    else:
+                        status = "Falhou"
+                        log(f"Falha ao atualizar '{package}': {result.stderr.strip()}")
+                except FileNotFoundError:
+                    status = "Indisponivel"
+                    log(f"Comando apt-get não disponível no sistema.")
+                
+                # Enviar resultado
+                encoded_output = urllib.parse.quote_plus(status)
+                response_url = (
+                    f"https://agent.iwebit.app/scripts/script_api.php?"
+                    f"UniqueID={uniqueid}&LinuxUpdateID={package}"
+                    f"&NewVersion={urllib.parse.quote_plus(new_version)}"
+                    f"&LinuxUpdatesRunned=1&Output={encoded_output}"
+                )
+                log(f"Enviando status '{status}' para API.")
+                requests.get(response_url, timeout=20)
 
             except Exception as e:
-                log(f"Erro ao atualizar {package}: {e}")
-                resultado = "Falhou"
-
-            # Envia resultado
-            result_url = (
-                f"https://agent.iwebit.app/scripts/script_api.php"
-                f"?UniqueID={uniqueid}"
-                f"&LinuxUpdateID={urllib.parse.quote_plus(package)}"
-                f"&NewVersion={urllib.parse.quote_plus(version)}"
-                f"&LinuxUpdatesRunned=1"
-                f"&Output={urllib.parse.quote_plus(resultado)}"
-            )
-
-            log(f"Enviando resultado: {resultado}")
-            try:
-                requests.get(result_url)
-            except Exception as e:
-                log(f"Erro ao enviar resultado para API: {e}")
-
+                log(f"Erro ao processar bloco de atualização: {e}")
     except Exception as e:
         log(f"Erro ao verificar atualizações remotas: {e}")
+
 
 
 
