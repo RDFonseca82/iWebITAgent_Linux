@@ -11,12 +11,14 @@ import requests
 import shutil
 import urllib.parse
 import re
+import netifaces
+
 from datetime import datetime
 
 # =================== CONFIG ===================
 CONFIG_FILE = '/opt/iwebit_agent/iwebit_agent.conf'
 # UNIQUEID_FILE = '/opt/iwebit_agent/uniqueid.conf'
-VERSION = '1.0.31.1'
+VERSION = '1.0.32.1'
 LOG_ENABLED = True
 LOG_FILE = '/var/log/iwebit_agent/iwebit_agent.log'
 UPDATE_URL = 'https://raw.githubusercontent.com/RDFonseca82/iWebITAgent_Linux/main/iwebit_agent.py'
@@ -167,7 +169,58 @@ def get_device_type():
     except:
         return 92  # Assumir Desktop por padrão
 
-import os
+
+
+def get_network_interfaces_info():
+    interfaces = psutil.net_if_addrs()
+    gateways = netifaces.gateways()
+
+    def get_gateway_for_interface(iface):
+        # Pega gateway default para a interface, se existir
+        default_gateways = gateways.get('default', {})
+        gw = default_gateways.get(netifaces.AF_INET)
+        if gw and gw[1] == iface:
+            return gw[0]
+        return None
+
+    def dhcp_enabled(iface):
+        # Checa se dhclient está rodando para a interface (heurística)
+        try:
+            output = subprocess.check_output(['ps', 'aux'], text=True)
+            for line in output.splitlines():
+                if 'dhclient' in line and iface in line:
+                    return True
+        except Exception:
+            pass
+        return False
+
+    result = []
+
+    for iface, addrs in interfaces.items():
+        ip_address = None
+        subnet_mask = None
+        mac_address = None
+
+        for addr in addrs:
+            if addr.family == psutil.AF_LINK:
+                mac_address = addr.address
+            elif addr.family == psutil.AF_INET:
+                ip_address = addr.address
+                subnet_mask = addr.netmask
+
+        gateway = get_gateway_for_interface(iface)
+        dhcp = dhcp_enabled(iface)
+
+        result.append({
+            'Interface': iface,
+            'IPAddress': ip_address,
+            'SubnetMask': subnet_mask,
+            'MacAddress': mac_address,
+            'Gateway': gateway,
+            'DHCPEnable': dhcp
+        })
+
+    return result
 
 def is_reboot_pending():
     # Verifica se o sistema Linux tem um reboot pendente. Retorna True se sim, False se não.
@@ -591,6 +644,7 @@ def send_data(fullsync):
             'Bios_Info': get_bios_info(),
             'MB_Info': get_motherboard_info(),
             'CPU_Info': get_cpu_info(),
+            'NetworkInfo': get_network_interfaces_info(),
             'RebootPending': is_reboot_pending()
         })
 
