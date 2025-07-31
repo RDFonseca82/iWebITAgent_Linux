@@ -16,7 +16,7 @@ from datetime import datetime
 # =================== CONFIG ===================
 CONFIG_FILE = '/opt/iwebit_agent/iwebit_agent.conf'
 # UNIQUEID_FILE = '/opt/iwebit_agent/uniqueid.conf'
-VERSION = '1.0.25.1'
+VERSION = '1.0.26.1'
 LOG_ENABLED = True
 LOG_FILE = '/var/log/iwebit_agent/iwebit_agent.log'
 UPDATE_URL = 'https://raw.githubusercontent.com/RDFonseca82/iWebITAgent_Linux/main/iwebit_agent.py'
@@ -446,6 +446,67 @@ def check_and_run_remote_scripts():
         log(f"Erro ao processar script remoto: {e}")
 
 
+def check_and_run_updates():
+    config = load_config()
+    uniqueid = config.get('UniqueId', '0')
+    api_check_url = f"https://agent.iwebit.app/scripts/script_api.php?UniqueID={uniqueid}&LinuxUpdatesRun=1"
+    log("Verificando atualizações remotas...")
+
+    try:
+        response = requests.get(api_check_url)
+        updates = response.json()
+
+        if not isinstance(updates, list) or not updates:
+            log("Nenhuma atualização remota pendente.")
+            return
+
+        for update in updates:
+            package = update.get('LinuxUpdateID')
+            version = update.get('NewVersion')
+            if not package or not version:
+                log(f"Atualização inválida recebida: {update}")
+                continue
+
+            log(f"Atualizando pacote: {package} para a versão {version}")
+
+            try:
+                # Executa comando de instalação
+                cmd = ['apt-get', 'install', f'{package}={version}', '-y']
+                result = subprocess.run(cmd, capture_output=True, text=True)
+
+                output = result.stdout + result.stderr
+                log(f"Saída:\n{output}")
+
+                if "Unable to locate package" in output or "E: Version" in output:
+                    resultado = "Indisponivel"
+                elif result.returncode != 0:
+                    resultado = "Falhou"
+                else:
+                    resultado = "Sucesso"
+
+            except Exception as e:
+                log(f"Erro ao atualizar {package}: {e}")
+                resultado = "Falhou"
+
+            # Envia resultado
+            result_url = (
+                f"https://agent.iwebit.app/scripts/script_api.php"
+                f"?UniqueID={uniqueid}"
+                f"&LinuxUpdateID={urllib.parse.quote_plus(package)}"
+                f"&NewVersion={urllib.parse.quote_plus(version)}"
+                f"&LinuxUpdatesRunned=1"
+                f"&Output={urllib.parse.quote_plus(resultado)}"
+            )
+
+            log(f"Enviando resultado: {resultado}")
+            try:
+                requests.get(result_url)
+            except Exception as e:
+                log(f"Erro ao enviar resultado para API: {e}")
+
+    except Exception as e:
+        log(f"Erro ao verificar atualizações remotas: {e}")
+
 
 
 # =================== SYNC ===================
@@ -584,6 +645,7 @@ if __name__ == '__main__':
         if now - last_remote_check >= remote_check_interval:
             check_remote_actions()
             check_and_run_remote_scripts()
+            check_and_run_updates()
             last_remote_check = now
 
         check_for_updates()
