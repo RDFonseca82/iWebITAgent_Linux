@@ -449,6 +449,8 @@ def check_and_run_remote_scripts():
 
 
 def check_and_run_updates():
+    config = load_config()
+    uniqueid = config.get('UniqueId', '0')    
     url = f"https://agent.iwebit.app/scripts/script_api.php?UniqueID={uniqueid}&LinuxUpdatesRun=1"
     try:
         response = requests.get(url, timeout=30)
