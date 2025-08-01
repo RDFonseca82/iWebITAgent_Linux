@@ -64,6 +64,8 @@ EOF
 echo "A instalar dependências..."
 apt update
 apt install -y python3 python3-psutil python3-requests curl
+apt install -y python3-pyqt5 python3-pyqt5.qtwebkit
+
 
 # Permissões
 chmod +x "$INSTALL_DIR/iwebit_agent.py"
