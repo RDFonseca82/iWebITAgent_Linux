@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Exec=/usr/bin/python3 /opt/iwebit_agent/iwebit_gui.py
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+Name=iWebIT Agent GUI
+Comment=Inicia a aplicação de monitorização da iWebIT
