@@ -18,7 +18,7 @@ from datetime import datetime
 # =================== CONFIG ===================
 CONFIG_FILE = '/opt/iwebit_agent/iwebit_agent.conf'
 # UNIQUEID_FILE = '/opt/iwebit_agent/uniqueid.conf'
-VERSION = '1.0.35.1'
+VERSION = '1.0.36.1'
 LOG_ENABLED = True
 LOG_FILE = '/var/log/iwebit_agent/iwebit_agent.log'
 UPDATE_URL = 'https://raw.githubusercontent.com/RDFonseca82/iWebITAgent_Linux/main/iwebit_agent.py'
@@ -615,7 +615,7 @@ def check_and_run_remote_scripts():
         try:
             data = response.json()
         except Exception:
-            log("Resposta da API não contém JSON válido. Nenhum script para executar.")
+            log("Nenhum script para executar.")
             return
 
         # Se não houver campo URL ou estiver vazio
