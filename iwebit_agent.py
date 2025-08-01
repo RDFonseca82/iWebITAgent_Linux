@@ -543,21 +543,54 @@ def get_pending_updates():
     return updates
 
     
-
 def check_for_updates():
     try:
-        remote = requests.get(UPDATE_URL).text
+        # Buscar script remoto
+        remote = requests.get(UPDATE_URL, timeout=10).text
         with open(SCRIPT_PATH, 'r') as f:
             local = f.read()
+
         if remote.strip() != local.strip():
-            log(f"Update available {VERSION}. Updating...")
+            log(f"Update disponível {VERSION}. A atualizar...")
+
+            # Atualizar script principal
             with open(SCRIPT_PATH, 'w') as f:
                 f.write(remote)
             os.chmod(SCRIPT_PATH, 0o755)
-            log(f"Update {VERSION} applied. Restarting agent...")
-            os.execv(SCRIPT_PATH, ['python3', SCRIPT_PATH])
+            log("Script principal atualizado.")
+
+            # Verificar se ambiente gráfico está presente
+            is_graphical = os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")
+
+            if is_graphical:
+                log("Ambiente desktop detetado. A verificar GUI...")
+                # URLs dos componentes GUI
+                gui_files = {
+                    "iwebit_gui.py": "https://raw.githubusercontent.com/RDFonseca82/iWebITAgent_Linux/main/iwebit_gui.py",
+                    "assets/iwebit_online.png": "https://intranet.iwebit.app/winsrv/iwebit_online.png",
+                    "assets/iwebit_offline.png": "https://intranet.iwebit.app/winsrv/iwebit_offline.png",
+                    "assets/iwebit_inactive.png": "https://intranet.iwebit.app/winsrv/iwebit_inactive.png"
+                }
+
+                base_path = "/opt/iwebit_agent"
+                for filename, url in gui_files.items():
+                    local_path = os.path.join(base_path, filename)
+                    os.makedirs(os.path.dirname(local_path), exist_ok=True)
+                    try:
+                        content = requests.get(url, timeout=10).content
+                        with open(local_path, "wb") as f:
+                            f.write(content)
+                        log(f"[GUI] Atualizado: {filename}")
+                    except Exception as e:
+                        log(f"[GUI] Falha ao atualizar {filename}: {e}")
+
+            # Reiniciar o agente com novo script
+            log("A reiniciar o agente...")
+            os.execv("/usr/bin/python3", ['python3', SCRIPT_PATH])
+
     except Exception as e:
-        log(f"Auto-update failed: {e}")
+        log(f"Falha na verificação de atualizações: {e}")
+        
 
 def is_connected():
     try:
