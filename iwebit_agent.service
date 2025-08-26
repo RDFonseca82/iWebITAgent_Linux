@@ -1,13 +1,21 @@
 [Unit]
 Description=iWebIT Agent
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 ExecStart=/usr/bin/python3 /opt/iwebit_agent/iwebit_agent.py
+WorkingDirectory=/opt/iwebit_agent/
 Restart=always
 RestartSec=10
+StartLimitInterval=60
+StartLimitBurst=10
 StandardOutput=append:/var/log/iwebit_agent.log
 StandardError=append:/var/log/iwebit_agent.log
+User=root
+# Watchdog opcional: reinicia se o serviço não responder
+WatchdogSec=120
+RestartPreventExitStatus=SIGKILL
 
 [Install]
 WantedBy=multi-user.target
