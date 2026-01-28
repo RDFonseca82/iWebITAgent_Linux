@@ -753,7 +753,7 @@ def get_linux_errors_warnings(max_events=50):
 
 
 
-def get_kernel_events(max_events=50):
+def get_kernel_events(max_events=100):
     cmd = [
         "journalctl",
         "--no-pager",
@@ -780,14 +780,24 @@ def get_kernel_events(max_events=50):
     for line in result.stdout.splitlines():
         try:
             entry = json.loads(line)
+
+            # 🔹 converter microsegundos → formato antigo
+            ts_raw = entry.get("__REALTIME_TIMESTAMP")
+            if ts_raw:
+                ts = datetime.fromtimestamp(int(ts_raw) / 1_000_000)
+                timestamp = ts.strftime('%Y-%m-%d %H:%M:%S')
+            else:
+                timestamp = "NULL"
+
             priority = entry.get("PRIORITY", "6")
 
             events.append({
                 "Source": "Kernel",
                 "Level": PRIORITY_MAP.get(priority, "INFO"),
-                "Timestamp": entry.get("__REALTIME_TIMESTAMP", "NULL"),
+                "Timestamp": timestamp,
                 "Message": entry.get("MESSAGE", "")
             })
+
         except Exception:
             continue
 
