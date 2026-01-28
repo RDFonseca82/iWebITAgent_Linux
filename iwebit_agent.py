@@ -18,7 +18,7 @@ from datetime import datetime
 # =================== CONFIG ===================
 CONFIG_FILE = '/opt/iwebit_agent/iwebit_agent.conf'
 # UNIQUEID_FILE = '/opt/iwebit_agent/uniqueid.conf'
-VERSION = '1.0.38.1'
+VERSION = '1.0.39.1'
 LOG_ENABLED = True
 LOG_FILE = '/var/log/iwebit_agent/iwebit_agent.log'
 UPDATE_URL = 'https://raw.githubusercontent.com/RDFonseca82/iWebITAgent_Linux/main/iwebit_agent.py'
@@ -722,7 +722,7 @@ def check_and_run_updates():
         log(f"Erro ao verificar atualizações remotas: {e}")
 
 
-def get_linux_errors_warnings(max_events=100):
+def get_linux_errors_warnings(max_events=50):
     try:
         cmd = [
             "journalctl",
@@ -752,32 +752,49 @@ def get_linux_errors_warnings(max_events=100):
         return {"Error": str(e)}
 
 
-def get_kernel_events(max_events=50):
+
+def get_kernel_events(max_events=100):
     cmd = [
         "journalctl",
         "--no-pager",
         "-k",
         "-n", str(max_events),
-        "-o", "short-iso"
+        "-o", "json"
     ]
 
     result = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
 
+    PRIORITY_MAP = {
+        "0": "EMERG",
+        "1": "ALERT",
+        "2": "CRITICAL",
+        "3": "ERROR",
+        "4": "WARNING",
+        "5": "NOTICE",
+        "6": "INFO",
+        "7": "DEBUG"
+    }
+
     events = []
 
     for line in result.stdout.splitlines():
-        events.append({
-            "Source": "Kernel",
-            "Timestamp": line[:19] if len(line) >= 19 else "NULL",
-            "Message": line
-        })
+        try:
+            entry = json.loads(line)
+            priority = entry.get("PRIORITY", "6")
+
+            events.append({
+                "Source": "Kernel",
+                "Level": PRIORITY_MAP.get(priority, "INFO"),
+                "Timestamp": entry.get("__REALTIME_TIMESTAMP", "NULL"),
+                "Message": entry.get("MESSAGE", "")
+            })
+        except Exception:
+            continue
 
     return {
         "Source": "Kernel",
         "Events": events
     }
-
-
 
 
 
