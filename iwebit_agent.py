@@ -763,10 +763,20 @@ def get_kernel_events(max_events=50):
 
     result = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
 
+    events = []
+
+    for line in result.stdout.splitlines():
+        events.append({
+            "Source": "Kernel",
+            "Timestamp": line[:19] if len(line) >= 19 else "NULL",
+            "Message": line
+        })
+
     return {
         "Source": "Kernel",
-        "Events": result.stdout.splitlines()
+        "Events": events
     }
+
 
 
 
