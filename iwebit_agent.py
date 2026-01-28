@@ -753,7 +753,7 @@ def get_linux_errors_warnings(max_events=50):
 
 
 
-def get_kernel_events(max_events=100):
+def get_kernel_events(max_events=50):
     cmd = [
         "journalctl",
         "--no-pager",
