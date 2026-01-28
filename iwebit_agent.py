@@ -722,6 +722,53 @@ def check_and_run_updates():
         log(f"Erro ao verificar atualizações remotas: {e}")
 
 
+def get_linux_errors_warnings(max_events=100):
+    try:
+        cmd = [
+            "journalctl",
+            "--no-pager",
+            "-p", "3..4",
+            "-n", str(max_events),
+            "-o", "short-iso"
+        ]
+
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
+
+        events = []
+
+        for line in result.stdout.splitlines():
+            events.append({
+                "Timestamp": line[:19],
+                "Level": "ERROR/WARNING",
+                "Message": line
+            })
+
+        return {
+            "Source": "journalctl",
+            "Events": events
+        }
+
+    except Exception as e:
+        return {"Error": str(e)}
+
+
+def get_kernel_events(max_events=50):
+    cmd = [
+        "journalctl",
+        "--no-pager",
+        "-k",
+        "-n", str(max_events),
+        "-o", "short-iso"
+    ]
+
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
+
+    return {
+        "Source": "Kernel",
+        "Events": result.stdout.splitlines()
+    }
+
+
 
 
 # =================== SYNC ===================
@@ -779,6 +826,8 @@ def send_data(fullsync):
             'DiskInfo': get_disk_info(),
             'MemoryInfo': get_physical_memory_info(),
             'RebootPending': is_reboot_pending()
+            'SystemErrorsWarnings': get_linux_errors_warnings(),
+            'KernelEvents': get_kernel_events()           
         })
 
     # Salvar JSON se Debug=1
