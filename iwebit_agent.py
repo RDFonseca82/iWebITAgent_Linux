@@ -592,11 +592,11 @@ def check_for_updates():
         log(f"Falha na verificação de atualizações: {e}")
         
 
-def is_connected():
+def is_connected(url="https://agent.iwebit.app", timeout=3):
     try:
-        subprocess.check_output(["ping", "-c", "1", "-W", "2", "iwebit.app"], stderr=subprocess.DEVNULL)
-        return True
-    except subprocess.CalledProcessError:
+        response = requests.head(url, timeout=timeout)
+        return response.status_code < 500
+    except requests.RequestException:
         return False
 
 
