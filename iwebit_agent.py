@@ -176,7 +176,7 @@ def get_device_type():
 
 def get_physical_memory_info():
     try:
-        output = subprocess.check_output(['dmidecode', '--type', '17'], text=True, stderr=subprocess.DEVNULL)
+        output = subprocess.check_output(['dmidecode', '--type', '17'], text=True, stderr=subprocess.DEVNULL, timeout=COMMAND_TIMEOUT)
     except subprocess.CalledProcessError:
         return []
 
@@ -221,7 +221,7 @@ def get_disk_info():
 
             # Verificar se está encriptado
             try:
-                lsblk_output = subprocess.check_output(['lsblk', '-no', 'TYPE', part.device], text=True).strip()
+                lsblk_output = subprocess.check_output(['lsblk', '-no', 'TYPE', part.device], text=True, timeout=COMMAND_TIMEOUT).strip()
                 encrypted = 'crypt' in lsblk_output or 'luks' in lsblk_output.lower()
             except Exception:
                 encrypted = False
@@ -230,7 +230,7 @@ def get_disk_info():
             label = None
             uuid = None
             try:
-                blkid_output = subprocess.check_output(['blkid', part.device], text=True).strip()
+                blkid_output = subprocess.check_output(['blkid', part.device], text=True, timeout=COMMAND_TIMEOUT).strip()
                 for entry in blkid_output.split():
                     if entry.startswith("LABEL="):
                         label = entry.split('=')[1].strip('"')
@@ -287,7 +287,7 @@ def get_network_interfaces_info():
 
     def dhcp_enabled(iface):
         try:
-            output = subprocess.check_output(['ps', 'aux'], text=True)
+            output = subprocess.check_output(['ps', 'aux'], text=True, timeout=COMMAND_TIMEOUT)
             for line in output.splitlines():
                 if 'dhclient' in line and iface in line:
                     return True
@@ -360,7 +360,7 @@ def get_all_installed_software():
     try:
         output = subprocess.check_output(
             ['dpkg-query', '-W', '-f=${Package}\t${Version}\t${Installed-Size}\t${Status}\n'],
-            stderr=subprocess.DEVNULL
+            stderr=subprocess.DEVNULL, timeout=COMMAND_TIMEOUT
         ).decode().strip().split('\n')
 
         for line in output:
@@ -380,7 +380,7 @@ def get_all_installed_software():
 
     # --------------------- SNAP ---------------------
     try:
-        snap_output = subprocess.check_output(['snap', 'list'], stderr=subprocess.DEVNULL).decode().strip().split('\n')[1:]
+        snap_output = subprocess.check_output(['snap', 'list'], stderr=subprocess.DEVNULL, timeout=COMMAND_TIMEOUT).decode().strip().split('\n')[1:]
         for line in snap_output:
             parts = line.split()
             if len(parts) >= 4:
@@ -400,7 +400,7 @@ def get_all_installed_software():
     try:
         flatpak_output = subprocess.check_output(
             ['flatpak', 'list', '--columns=application,version,installation'],
-            stderr=subprocess.DEVNULL
+            stderr=subprocess.DEVNULL, timeout=COMMAND_TIMEOUT
         ).decode().strip().split('\n')
 
         for line in flatpak_output:
@@ -424,7 +424,7 @@ def get_all_installed_software():
 
 def run_dmidecode(keyword):
     try:
-        output = subprocess.check_output(['dmidecode', '-t', keyword], text=True, stderr=subprocess.DEVNULL)
+        output = subprocess.check_output(['dmidecode', '-t', keyword], text=True, stderr=subprocess.DEVNULL, timeout=COMMAND_TIMEOUT)
         return output
     except subprocess.CalledProcessError:
         return ''
@@ -471,7 +471,7 @@ def get_os_info():
 
 def get_bios_last_upgrade_date():
     try:
-        output = subprocess.check_output(['stat', '/sys/class/dmi/id/bios_date'], text=True)
+        output = subprocess.check_output(['stat', '/sys/class/dmi/id/bios_date'], text=True, timeout=COMMAND_TIMEOUT)
         match = re.search(r'Modify:\s(.+)', output)
         if match:
             return match.group(1)
@@ -489,7 +489,7 @@ def get_pending_updates():
     try:
         output = subprocess.check_output(
             ['apt', 'list', '--upgradeable'],
-            stderr=subprocess.DEVNULL
+            stderr=subprocess.DEVNULL, timeout=COMMAND_TIMEOUT
         ).decode().splitlines()
 
         for line in output:
@@ -517,7 +517,7 @@ def get_pending_updates():
             try:
                 apt_show = subprocess.check_output(
                     ['apt-cache', 'show', name],
-                    stderr=subprocess.DEVNULL
+                    stderr=subprocess.DEVNULL, timeout=COMMAND_TIMEOUT
                 ).decode()
 
                 origin_match = re.search(r'^Origin:\s*(.+)', apt_show, re.MULTILINE)
@@ -602,7 +602,7 @@ def check_for_updates():
                     local_path = os.path.join(base_path, filename)
                     os.makedirs(os.path.dirname(local_path), exist_ok=True)
                     try:
-                        content = requests.get(url, timeout=10).content
+                        content = requests.get(url, timeout=HTTP_TIMEOUT).content
                         with open(local_path, "wb") as f:
                             f.write(content)
                         log(f"[GUI] Atualizado: {filename}")
@@ -761,7 +761,7 @@ def get_linux_errors_warnings(max_events=50):
             "-o", "short-iso"
         ]
 
-        result = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, text=True, timeout=COMMAND_TIMEOUT)
 
         events = []
 
@@ -791,7 +791,7 @@ def get_kernel_events(max_events=100):
         "-o", "json"
     ]
 
-    result = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, text=True, timeout=COMMAND_TIMEOUT)
 
     PRIORITY_MAP = {
         "0": "EMERG",

@@ -43,9 +43,15 @@ sudo rm -rf /var/log/iwebit_agent
 
 ----------------------------------------------------------------------------------------
 
-# Update Manual
+# Atualizar apenas o agente
 
-sudo curl -o /opt/iwebit_agent/iwebit_agent.py https://raw.githubusercontent.com/RDFonseca82/iWebITAgent_Linux/main/iwebit_agent.py && sudo chmod +x /opt/iwebit_agent/iwebit_agent.py && sudo systemctl restart iwebit_agent
+Este comando descarrega para um ficheiro temporário, valida a sintaxe Python e só depois substitui o agente e reinicia o serviço:
+
+```bash
+sudo sh -c 'set -e; tmp=$(mktemp /opt/iwebit_agent/iwebit_agent.py.XXXXXX); trap "rm -f \"$tmp\"" EXIT; curl --fail --location --retry 3 --connect-timeout 10 --max-time 60 -o "$tmp" https://raw.githubusercontent.com/RDFonseca82/iWebITAgent_Linux/main/iwebit_agent.py; /usr/bin/python3 -m py_compile "$tmp"; chmod 755 "$tmp"; mv -f "$tmp" /opt/iwebit_agent/iwebit_agent.py; systemctl restart iwebit_agent'
+```
+
+Para atualizar também a unidade systemd para a versão mais recente, execute novamente `sudo ./install.sh`.
 
 ----------------------------------------------------------------------------------------
 

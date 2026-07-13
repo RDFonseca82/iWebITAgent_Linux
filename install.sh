@@ -48,12 +48,19 @@ fi
 cat <<EOF > /etc/systemd/system/iwebit_agent.service
 [Unit]
 Description=iWebIT Agent
-After=network.target
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=10
 
 [Service]
 ExecStart=/usr/bin/python3 /opt/iwebit_agent/iwebit_agent.py
 WorkingDirectory=/opt/iwebit_agent/
 Restart=always
+RestartSec=10
+RuntimeMaxSec=2h
+StandardOutput=append:/var/log/iwebit_agent/iwebit_agent.log
+StandardError=append:/var/log/iwebit_agent/iwebit_agent.log
 User=root
 
 [Install]
