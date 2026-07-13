@@ -12,18 +12,22 @@ import shutil
 import urllib.parse
 import re
 import netifaces
+import sys
+import tempfile
 
 from datetime import datetime
 
 # =================== CONFIG ===================
 CONFIG_FILE = '/opt/iwebit_agent/iwebit_agent.conf'
 # UNIQUEID_FILE = '/opt/iwebit_agent/uniqueid.conf'
-VERSION = '1.0.40.2'
+VERSION = '1.0.41.0'
 LOG_ENABLED = True
 LOG_FILE = '/var/log/iwebit_agent/iwebit_agent.log'
 UPDATE_URL = 'https://raw.githubusercontent.com/RDFonseca82/iWebITAgent_Linux/main/iwebit_agent.py'
 SCRIPT_PATH = '/opt/iwebit_agent/iwebit_agent.py'
 API_URL = 'https://agent.iwebit.app/scripts/script_linux.php'
+HTTP_TIMEOUT = (5, 30)  # (ligação, resposta); nunca bloquear o agente indefinidamente
+COMMAND_TIMEOUT = 60
 
 # =================== LOGGING ===================
 def log(message):
@@ -140,13 +144,13 @@ def get_current_user():
 
 def get_public_ip():
     try:
-        return requests.get('https://api.ipify.org').text
+        return requests.get('https://api.ipify.org', timeout=HTTP_TIMEOUT).text
     except:
         return 'Unavailable'
 
 def get_location():
     try:
-        res = requests.get('https://ipinfo.io/json').json()
+        res = requests.get('https://ipinfo.io/json', timeout=HTTP_TIMEOUT).json()
         loc = res.get('loc', '0,0').split(',')
         return loc[0], loc[1]
     except:
@@ -544,19 +548,40 @@ def get_pending_updates():
 
     
 def check_for_updates():
+    config = load_config()
+    if config.get('AutoUpdate', '1') != '1':
+        return
+
     try:
-        # Buscar script remoto
-        remote = requests.get(UPDATE_URL, timeout=10).text
+        # Transferir para memória e validar antes de tocar no agente em execução.
+        response = requests.get(UPDATE_URL, timeout=HTTP_TIMEOUT)
+        response.raise_for_status()
+        remote = response.text
+        if not remote.startswith('#!'):
+            raise ValueError('O ficheiro remoto não parece ser um script Python válido.')
+        compile(remote, SCRIPT_PATH, 'exec')
+
         with open(SCRIPT_PATH, 'r') as f:
             local = f.read()
 
         if remote.strip() != local.strip():
             log(f"Update disponível {VERSION}. A atualizar...")
 
-            # Atualizar script principal
-            with open(SCRIPT_PATH, 'w') as f:
-                f.write(remote)
-            os.chmod(SCRIPT_PATH, 0o755)
+            # Substituição atómica: em caso de falha mantém-se sempre a versão anterior.
+            fd, temporary_path = tempfile.mkstemp(
+                prefix='iwebit_agent.', suffix='.py', dir=os.path.dirname(SCRIPT_PATH)
+            )
+            try:
+                with os.fdopen(fd, 'w', encoding='utf-8') as f:
+                    f.write(remote)
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.chmod(temporary_path, 0o755)
+                os.replace(temporary_path, SCRIPT_PATH)
+            except Exception:
+                if os.path.exists(temporary_path):
+                    os.unlink(temporary_path)
+                raise
             log("Script principal atualizado.")
 
             # Verificar se ambiente gráfico está presente
@@ -586,7 +611,7 @@ def check_for_updates():
 
             # Reiniciar o agente com novo script
             log("A reiniciar o agente...")
-            os.execv("/usr/bin/python3", ['python3', SCRIPT_PATH])
+            os.execv(sys.executable, [sys.executable, SCRIPT_PATH])
 
     except Exception as e:
         log(f"Falha na verificação de atualizações: {e}")
@@ -594,7 +619,7 @@ def check_for_updates():
 
 def is_connected(url="https://agent.iwebit.app", timeout=5):
     try:
-        response = requests.head(url, timeout=timeout, allow_redirects=True)
+        response = requests.head(url, timeout=(timeout, timeout), allow_redirects=True)
         return response.status_code < 500
     except requests.RequestException as e:
         log(f"Erro ao verificar conexão: {e}")
@@ -610,7 +635,8 @@ def check_and_run_remote_scripts():
     try:
         # Passo 1: Verifica se há script para executar
         check_url = f'https://agent.iwebit.app/scripts/script_api.php?UniqueID={uniqueid}&ScriptRun=1'
-        response = requests.get(check_url, timeout=10)
+        response = requests.get(check_url, timeout=HTTP_TIMEOUT)
+        response.raise_for_status()
 
         # Verifica se a resposta é válida e em JSON
         try:
@@ -630,7 +656,8 @@ def check_and_run_remote_scripts():
 
         # Passo 2: Baixar script
         log(f"Baixando script de: {script_url}")
-        script_resp = requests.get(script_url, timeout=10)
+        script_resp = requests.get(script_url, timeout=HTTP_TIMEOUT)
+        script_resp.raise_for_status()
         with open(script_path, 'w') as f:
             f.write(script_resp.text)
         os.chmod(script_path, 0o755)
@@ -646,7 +673,7 @@ def check_and_run_remote_scripts():
         # Passo 4: Enviar resposta
         return_url = f'https://agent.iwebit.app/scripts/script_api.php?UniqueID={uniqueid}&ScriptRunned=1&Output={urllib.parse.quote_plus(output)}'
         log(f"Enviando saída do script para API. ({output})")
-        requests.get(return_url, timeout=10)
+        requests.get(return_url, timeout=HTTP_TIMEOUT).raise_for_status()
 
         # Remover script após execução
         if script_path.startswith(script_dir):
@@ -669,7 +696,8 @@ def check_and_run_updates():
     uniqueid = config.get('UniqueId', '0')    
     url = f"https://agent.iwebit.app/scripts/script_api.php?UniqueID={uniqueid}&LinuxUpdatesRun=1"
     try:
-        response = requests.get(url, timeout=30)
+        response = requests.get(url, timeout=HTTP_TIMEOUT)
+        response.raise_for_status()
         raw_data = response.text.strip()
         
         # Extrai cada bloco JSON separadamente com regex
@@ -694,7 +722,7 @@ def check_and_run_updates():
                 try:
                     result = subprocess.run(
                         ["apt-get", "install", "--only-upgrade", "-y", package],
-                        capture_output=True, text=True
+                        capture_output=True, text=True, timeout=300
                     )
                     if result.returncode == 0:
                         status = "Sucesso"
@@ -715,7 +743,7 @@ def check_and_run_updates():
                     f"&LinuxUpdatesRunned=1&Output={encoded_output}"
                 )
                 log(f"Enviando status '{status}' para API.")
-                requests.get(response_url, timeout=20)
+                requests.get(response_url, timeout=HTTP_TIMEOUT).raise_for_status()
 
             except Exception as e:
                 log(f"Erro ao processar bloco de atualização: {e}")
@@ -880,7 +908,8 @@ def send_data(fullsync):
     
     try:
         headers = {'Content-Type': 'application/json'}
-        response = requests.post(API_URL, json=data, headers=headers)
+        response = requests.post(API_URL, json=data, headers=headers, timeout=HTTP_TIMEOUT)
+        response.raise_for_status()
         log(f"Data sent. Status code: {response.status_code}")
     except Exception as e:
         log(f"Failed to send data: {e}")
@@ -895,7 +924,7 @@ def check_remote_actions():
 
     try:
         url = f"https://agent.iwebit.app/scripts/script_api.php?UniqueID={uniqueid}"
-        response = requests.get(url, timeout=10)
+        response = requests.get(url, timeout=HTTP_TIMEOUT)
         if response.status_code != 200:
             log(f"Falha ao obter ações remotas. Código HTTP: {response.status_code}")
             return
