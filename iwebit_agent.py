@@ -20,7 +20,7 @@ from datetime import datetime
 # =================== CONFIG ===================
 CONFIG_FILE = '/opt/iwebit_agent/iwebit_agent.conf'
 # UNIQUEID_FILE = '/opt/iwebit_agent/uniqueid.conf'
-VERSION = '1.0.41.0'
+VERSION = '1.0.41.1'
 LOG_ENABLED = True
 LOG_FILE = '/var/log/iwebit_agent/iwebit_agent.log'
 UPDATE_URL = 'https://raw.githubusercontent.com/RDFonseca82/iWebITAgent_Linux/main/iwebit_agent.py'
@@ -970,19 +970,21 @@ if __name__ == '__main__':
         
         now = time.time()
         
-        if now - last_fullsync >= full_interval:
-            log("Performing FULL sync")
-            send_data(fullsync=True)
-            last_fullsync = now
-        else:
-            log("Performing MINIMAL sync")
-            send_data(fullsync=False)
+        # Enviar primeiro o estado mínimo. Assim a versão e o estado básico
+        # chegam à API mesmo que a recolha completa fique lenta ou indisponível.
+        log("Performing MINIMAL sync")
+        send_data(fullsync=False)
 
         if now - last_remote_check >= remote_check_interval:
             check_remote_actions()
             check_and_run_remote_scripts()
             check_and_run_updates()
             last_remote_check = now
+
+        if now - last_fullsync >= full_interval:
+            log("Performing FULL sync")
+            send_data(fullsync=True)
+            last_fullsync = now
 
         check_for_updates()
         time.sleep(minimal_interval)
